@@ -1,0 +1,6 @@
+[build]
+  command = "npm run build:site"
+  publish = "site"
+
+[build.environment]
+  NODE_VERSION = "24.19.0"

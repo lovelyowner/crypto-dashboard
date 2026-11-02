@@ -1,0 +1,69 @@
+{
+  "name": "fathom-crypto-dashboard",
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "overrides": {
+    "nf3": "0.3.17"
+  },
+  "scripts": {
+    "dev": "vite dev --host 0.0.0.0 --port 8080",
+    "build": "vite build",
+    "start": "NODE_ENV=production node .output/server/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-isolation=none src/lib/*.test.ts src/lib/wallet/*.test.ts src/lib/auth/*.test.ts",
+    "lint": "eslint src vite.config.ts",
+    "test:e2e": "node tests/browser.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "test:auth": "node scripts/auth-integration.mjs",
+    "build:site": "vite build --config vite.static.config.ts && node scripts/package-site.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@scure/base": "^2.4.0",
+    "@scure/bip32": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
+    "@tailwindcss/vite": "^4.3.0",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-router": "^1.170.0",
+    "@tanstack/react-start": "^1.168.60",
+    "@tanstack/router-plugin": "^1.168.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "better-auth": "~1.6.30",
+    "clsx": "^2.1.1",
+    "kysely": "^0.28.5",
+    "lucide-react": "^0.510.0",
+    "nitro": "3.0.260610-beta",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^5.7.0",
+    "vite": "^8.2.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/node": "^22.16.5",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.20.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-prettier": "^5.2.6",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^15.15.0",
+    "playwright": "^1.62.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.23.15",
+    "typescript-eslint": "^8.56.1"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
