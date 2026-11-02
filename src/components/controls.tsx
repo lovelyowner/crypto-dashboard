@@ -17,9 +17,9 @@ export function Button({
       type={type}
       className={cn(
         "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        variant === "primary" && "bg-primary text-primary-fg hover:bg-primary/90",
-        variant === "ghost" && "bg-raise text-fg hover:bg-border",
-        variant === "line" && "border border-border bg-transparent text-fg hover:border-primary",
+        variant === "primary" && "border-2 border-border bg-bg text-fg",
+        variant === "ghost" && "border border-border bg-bg text-fg",
+        variant === "line" && "border border-border bg-bg text-fg",
         className,
       )}
       {...props}
@@ -31,7 +31,7 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return (
     <input
       className={cn(
-        "min-h-11 w-full rounded-xl border border-border bg-bg px-3 text-base text-fg outline-none placeholder:text-muted focus-visible:border-primary",
+        "min-h-11 w-full rounded-xl border border-border bg-bg px-3 text-base text-fg outline-none placeholder:text-muted focus-visible:outline focus-visible:outline-border",
         className,
       )}
       {...props}
@@ -43,7 +43,7 @@ export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        "min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-3 text-base text-fg outline-none placeholder:text-muted focus-visible:border-primary",
+        "min-h-24 w-full rounded-xl border border-border bg-bg px-3 py-3 text-base text-fg outline-none placeholder:text-muted focus-visible:outline focus-visible:outline-border",
         className,
       )}
       {...props}

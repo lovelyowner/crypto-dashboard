@@ -13,7 +13,7 @@ export const Route = createRootRoute({
         content:
           "A private workspace for your multi-chain addresses. Track public activity and create encrypted wallets in your browser.",
       },
-      { name: "theme-color", content: "#0b111b" },
+      { name: "theme-color", content: "#ffffff" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

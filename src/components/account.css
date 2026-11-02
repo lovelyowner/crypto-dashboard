@@ -1,5 +1,5 @@
 .account-panel {
-  color: #e8eef8;
+  color: var(--ui-text-1);
   width: 100%;
   font-family: inherit;
 }
@@ -14,18 +14,19 @@
   height: 48px;
   display: grid;
   place-items: center;
-  background: #18372f;
-  color: #70e3ce;
-  border: 1px solid #31564d;
+  background: var(--ui-background);
+  color: var(--ui-icon);
+  border: 1px solid var(--ui-border);
   border-radius: 16px;
 }
 .account-eyebrow {
   font-size: 10px;
   letter-spacing: 0.2em;
-  color: #70e3ce;
+  color: var(--ui-text-1);
   margin: 0 0 5px;
 }
 .account-heading h2 {
+  color: var(--ui-text-3);
   font-family: inherit;
   font-size: 25px;
   font-weight: 600;
@@ -33,7 +34,7 @@
 }
 .account-intro,
 .account-help {
-  color: #97a7bb;
+  color: var(--ui-text-2);
   font-size: 13px;
   line-height: 1.65;
   margin: 10px 0 16px;
@@ -48,15 +49,15 @@
   display: grid;
   gap: 8px;
   font-size: 13px;
-  color: #cbd5e1;
+  color: var(--ui-text-2);
 }
 .account-form input:not([type="checkbox"]),
 .account-label input {
-  background: #0b111b;
-  border: 1px solid #2d3c50;
+  background: var(--ui-background);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
   padding: 12px 13px;
-  color: #eef5ff;
+  color: var(--ui-text-3);
   width: 100%;
   font: inherit;
   min-height: 44px;
@@ -64,13 +65,14 @@
 }
 .account-form input:focus,
 .account-label input:focus {
-  border-color: #70e3ce;
-  box-shadow: 0 0 0 2px #70e3ce22;
+  border-color: var(--ui-border);
+  outline: 2px solid var(--ui-border);
+  outline-offset: 3px;
 }
 .account-form small,
 .account-label small {
   font-size: 11px;
-  color: #8a9aae;
+  color: var(--ui-text-1);
   line-height: 1.5;
 }
 .account-primary,
@@ -85,25 +87,28 @@
   padding: 10px 14px;
   font: inherit;
   font-size: 13px;
-  border: 1px solid transparent;
+  border: 1px solid var(--ui-border);
   font-weight: 600;
 }
 .account-primary {
-  background: #70e3ce;
-  color: #0b211b;
+  background: var(--ui-background);
+  color: var(--ui-text-3);
 }
 .account-secondary {
-  background: #182536;
-  color: #d6e3f3;
-  border-color: #2a3b50;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
+  border-color: var(--ui-border);
 }
 .account-danger {
-  background: #3c2028;
-  color: #f1b7bc;
-  border-color: #713d48;
+  background: var(--ui-background);
+  color: var(--ui-text-3);
+  border-style: dashed;
+  border-color: var(--ui-border);
 }
 .account-panel button:disabled {
-  opacity: 0.4;
+  opacity: 1;
+  color: var(--ui-text-1);
+  border-style: dashed;
   cursor: not-allowed;
 }
 .account-checkbox {
@@ -112,29 +117,32 @@
   gap: 10px !important;
 }
 .account-checkbox input {
-  accent-color: #70e3ce;
+  accent-color: var(--ui-icon);
   width: 16px;
   height: 16px;
 }
 .account-segment {
   display: flex;
   padding: 4px;
-  background: #0b111b;
-  border: 1px solid #25374c;
+  background: var(--ui-background);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
   gap: 4px;
 }
 .account-segment button {
   flex: 1;
-  color: #8e9db0;
+  color: var(--ui-text-2);
   border: 0;
-  background: transparent;
+  background: var(--ui-background);
   border-radius: 6px;
   padding: 8px;
 }
 .account-segment button[aria-pressed="true"] {
-  background: #223348;
-  color: #e1f7f2;
+  background: var(--ui-background);
+  color: var(--ui-text-3);
+  outline: 1px solid var(--ui-border);
+  outline-offset: -1px;
+  font-weight: 600;
 }
 .account-form-links {
   display: flex;
@@ -145,9 +153,9 @@
 }
 .account-form-links button,
 .account-text-button {
-  background: none;
+  background: var(--ui-background);
   border: 0;
-  color: #70e3ce;
+  color: var(--ui-text-2);
   padding: 4px 0;
   font: inherit;
   font-size: 12px;
@@ -157,16 +165,17 @@
   display: flex;
   align-items: center;
   gap: 15px;
-  color: #6c7e94;
+  color: var(--ui-text-1);
   font-size: 10px;
   letter-spacing: 0.12em;
   margin: 26px 0 18px;
 }
 .account-divider:before,
 .account-divider:after {
+  border-top: 1px solid var(--ui-border);
   content: "";
-  height: 1px;
-  background: #26364a;
+  height: 0;
+  border-top: 1px solid var(--ui-border);
   flex: 1;
 }
 .account-providers {
@@ -175,14 +184,14 @@
   gap: 9px;
 }
 .account-provider {
-  border: 1px solid #2b3c51;
-  background: #142132;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-background);
   border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px;
-  color: #e0e9f5;
+  color: var(--ui-text-2);
   text-align: left;
   font-size: 12px;
   min-width: 0;
@@ -191,11 +200,11 @@
   font-size: 19px;
   width: 24px;
   text-align: center;
-  color: #b9dbed;
+  color: var(--ui-icon);
 }
 .account-provider small {
   display: block;
-  color: #8b9cb2;
+  color: var(--ui-text-1);
   font-size: 10px;
   margin-top: 3px;
 }
@@ -207,17 +216,18 @@
   overflow-wrap: anywhere;
 }
 .account-error {
-  border: 1px solid #813c4d;
-  background: #3e212d;
-  color: #ffd2da;
+  border: 1px dashed var(--ui-border);
+  background: var(--ui-background);
+  color: var(--ui-text-3);
+  font-weight: 600;
 }
 .account-success {
-  border: 1px solid #2b6857;
-  background: #163b31;
-  color: #b3f4d8;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-background);
+  color: var(--ui-text-2);
 }
 .account-identity {
-  border: 1px solid #2a3c50;
+  border: 1px solid var(--ui-border);
   border-radius: 13px;
   display: flex;
   justify-content: space-between;
@@ -227,27 +237,27 @@
   margin: 22px 0;
 }
 .account-identity p {
-  color: #9aaec5;
+  color: var(--ui-text-2);
   margin: 5px 0;
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 .account-identity small {
   font-size: 11px;
-  color: #90a2b9;
+  color: var(--ui-text-1);
 }
 .account-section-heading {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #70e3ce;
-  border-top: 1px solid #29374b;
+  color: var(--ui-icon);
+  border-top: 1px solid var(--ui-border);
   padding-top: 24px;
   margin: 26px 0 10px;
 }
 .account-section-heading h3 {
   margin: 0;
-  color: #d7e5f6;
+  color: var(--ui-text-3);
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -256,13 +266,14 @@
   font-size: 9px;
   padding: 4px 7px;
   border-radius: 5px;
-  background: #163a31;
-  color: #9be4c8;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
   margin-left: auto;
+  border: 1px solid var(--ui-border);
 }
 .account-badge-muted {
-  background: #2d3134;
-  color: #acb3be;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
 }
 .account-label {
   margin: 14px 0;
@@ -275,8 +286,8 @@
 }
 .account-setup,
 .account-backup {
-  border: 1px solid #36516b;
-  background: #101e2e;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-background);
   border-radius: 12px;
   padding: 16px;
   margin: 16px 0;
@@ -286,33 +297,35 @@
   word-break: break-all;
   font-size: 14px;
   line-height: 1.7;
-  color: #b5e8df;
-  background: #0c1521;
+  color: var(--ui-text-3);
+  background: var(--ui-background);
   padding: 12px;
   border-radius: 8px;
   user-select: all;
+  border: 1px solid var(--ui-border);
 }
 .account-setup a {
   display: inline-flex;
   gap: 6px;
-  color: #70e3ce;
+  color: var(--ui-text-2);
   font-size: 12px;
   margin-top: 12px;
 }
 .account-backup pre {
   font: 13px/1.9 monospace;
   columns: 2;
-  background: #0b1521;
+  background: var(--ui-background);
   padding: 12px;
-  color: #d7e5f1;
+  color: var(--ui-text-3);
   user-select: all;
+  border: 1px solid var(--ui-border);
 }
 .account-linked {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  border: 1px solid #25374b;
+  border: 1px solid var(--ui-border);
   border-radius: 9px;
   margin-top: 8px;
   font-size: 12px;
@@ -320,8 +333,8 @@
 .account-footnote {
   font-size: 11px;
   line-height: 1.7;
-  color: #7e91aa;
-  border-top: 1px solid #27364a;
+  color: var(--ui-text-1);
+  border-top: 1px solid var(--ui-border);
   padding-top: 18px;
   margin: 24px 0 10px;
 }
@@ -335,7 +348,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  color: #8c9fb4;
+  color: var(--ui-text-2);
 }
 .account-spin {
   animation: account-spin 1s linear infinite;

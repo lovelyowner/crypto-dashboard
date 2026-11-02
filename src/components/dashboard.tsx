@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   Activity,
+  Atom,
   ArrowDownLeft,
   ArrowDownToLine,
   ArrowRight,
@@ -386,7 +387,7 @@ export function Dashboard() {
                   </div>
                   <strong>{String(watched.length).padStart(2, "0")}</strong>
                   <small>
-                    <span className="teal-text">Watch-only</span> · no keys needed
+                    <span className="emphasis-text">Watch-only</span> · no keys needed
                   </small>
                 </article>
                 <article className="stat">
@@ -758,7 +759,7 @@ export function Dashboard() {
                                 {CHAINS[t.chain].name}
                                 <small>{shortAddress(t.address)}</small>
                               </td>
-                              <td className={t.direction === "in" ? "teal-text" : ""}>
+                              <td className={t.direction === "in" ? "emphasis-text" : ""}>
                                 {t.direction === "in" ? "+" : t.direction === "out" ? "−" : ""}
                                 {t.amount} {t.symbol}
                               </td>
@@ -947,15 +948,14 @@ export function ChainIcon({ chain }: { chain: ChainId }) {
     bitcoin: "₿",
     ethereum: "Ξ",
     solana: "≋",
-    cosmos: "⚛",
     near: "N",
     xrp: "X",
     polkadot: "●",
     monero: "ɱ",
   };
   return (
-    <span className={`chain-icon chain-${chain}`} style={{ color: c.color }} aria-label={c.name}>
-      {symbols[chain] || c.monogram.slice(0, 3)}
+    <span className={`chain-icon chain-${chain}`} aria-label={c.name}>
+      {chain === "cosmos" ? <Atom size={20} /> : symbols[chain] || c.monogram.slice(0, 3)}
     </span>
   );
 }
@@ -1065,7 +1065,7 @@ function AddAddress({ onClose, onAdded }: { onClose: () => void; onAdded: () => 
         <span
           className={
             isValidAddress(chain, address)
-              ? "teal-text validation-message"
+              ? "emphasis-text validation-message"
               : "muted validation-message"
           }
         >
