@@ -1,6 +1,6 @@
 import { isChainId, isValidAddress, activityKey, type ChainId } from "./chains";
 import type { ChainActivity } from "./activity.functions";
-export type PublicWatch = { chain: ChainId; address: string; label: string };
+export type PublicWatch = { chain: ChainId; address: string; label: string; pinned?: boolean };
 export function parseWatchlist(input: unknown): PublicWatch[] {
   if (
     !input ||
@@ -22,13 +22,19 @@ export function parseWatchlist(input: unknown): PublicWatch[] {
       typeof r.address !== "string" ||
       !isValidAddress(r.chain, r.address) ||
       typeof r.label !== "string" ||
-      r.label.length > 80
+      r.label.length > 80 ||
+      (r.pinned !== undefined && typeof r.pinned !== "boolean")
     )
       throw new Error("The watchlist contains an invalid network, address, or label.");
     const key = activityKey(r.chain, r.address);
     if (keys.has(key)) throw new Error("The watchlist contains a duplicate address.");
     keys.add(key);
-    return { chain: r.chain, address: r.address.trim(), label: r.label };
+    return {
+      chain: r.chain,
+      address: r.address.trim(),
+      label: r.label,
+      ...(typeof r.pinned === "boolean" ? { pinned: r.pinned } : {}),
+    };
   });
 }
 export function portfolioSummary(results: ChainActivity[], total: number) {

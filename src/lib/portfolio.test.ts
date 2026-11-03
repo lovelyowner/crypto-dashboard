@@ -46,3 +46,19 @@ test("CSV cells escape quotes and prevent formula injection in exported labels/a
   assert.equal(csvCell('=HYPERLINK("bad")'), '"\'=HYPERLINK(""bad"")"');
   assert.equal(csvCell('a,b\n"c"'), '"a,b\n""c"""');
 });
+
+test("watchlist roundtrip preserves optional pins and rejects invalid pin metadata", () => {
+  assert.equal(
+    parseWatchlist({
+      version: 1,
+      addresses: [{ chain: "ethereum", address: eth, label: "Pinned", pinned: true }],
+    })[0].pinned,
+    true,
+  );
+  assert.throws(() =>
+    parseWatchlist({
+      version: 1,
+      addresses: [{ chain: "ethereum", address: eth, label: "Pinned", pinned: "yes" }],
+    }),
+  );
+});

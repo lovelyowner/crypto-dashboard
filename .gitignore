@@ -14,3 +14,4 @@ test-results/
 .local/
 site/
 Fathom.html
+screenshots/*-failure.png

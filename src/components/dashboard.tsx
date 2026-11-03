@@ -9,10 +9,16 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
-  Check,
   CheckCheck,
   ChevronDown,
   Copy,
+  Eye,
+  EyeOff,
+  Pencil,
+  Pin,
+  Settings,
+  Pause,
+  WifiOff,
   ExternalLink,
   Globe2,
   KeyRound,
@@ -27,24 +33,21 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import {
-  CHAINS,
-  CHAIN_IDS,
-  activityKey,
-  detectFamily,
-  isValidAddress,
-  type ChainId,
-} from "@/lib/chains";
+import { CHAINS, CHAIN_IDS, activityKey, type ChainId } from "@/lib/chains";
 import { fetchActivity } from "@/lib/activity.functions";
-import { useLedger } from "@/lib/ledger-store";
+import { useLedger, type WatchedAddress } from "@/lib/ledger-store";
 import { formatUsd, relativeTime, shortAddress } from "@/lib/format";
-import { csvCell, downloadFile, parseWatchlist, portfolioSummary } from "@/lib/portfolio";
+import { downloadFile, parseWatchlist, portfolioSummary } from "@/lib/portfolio";
+import { AddressEntry, EditAddressLabel } from "./address-entry";
+import { TransactionExplorer } from "./transaction-explorer";
+import { WorkspaceSettings } from "./workspace-settings";
+import { useOnlineStatus, useWorkspacePreferences } from "@/lib/workspace-preferences";
 import { WalletPanel } from "./wallet-panel";
 import { AccountPanel } from "@/components/account-panel";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 type Tab = "Overview" | "Activity" | "Wallets" | "Networks";
-type Modal = "address" | "wallet" | "account" | null;
+type Modal = "address" | "wallet" | "account" | "settings" | "edit" | null;
 const NAV = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Activity", icon: Activity },
@@ -64,14 +67,19 @@ const EXAMPLES = [
   },
 ];
 export function Dashboard() {
-  const { watched, wallets, hydrated, addWatched, removeWatched } = useLedger();
+  const { watched, wallets, hydrated, addWatchedBatch, removeWatched, togglePinned } = useLedger();
+  const preferences = useWorkspacePreferences();
+  const online = useOnlineStatus();
+  const canSync = preferences.hydrated && online && !preferences.syncPaused;
+  const [sort, setSort] = useState("recent");
+  const [editing, setEditing] = useState<WatchedAddress | null>(null);
+  const [initialChain, setInitialChain] = useState<ChainId | undefined>();
   const { user } = useCurrentUserState();
   const [tab, setTab] = useState<Tab>("Overview");
   const [modal, setModal] = useState<Modal>(null);
   const [search, setSearch] = useState("");
   const [network, setNetwork] = useState("all");
   const [direction, setDirection] = useState("all");
-  const [interval, setIntervalValue] = useState(60000);
   const [toast, setToast] = useState("");
   const [menu, setMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -79,8 +87,6 @@ export function Dashboard() {
     void Promise.resolve(useLedger.persist.rehydrate()).then(() =>
       useLedger.getState().setHydrated(true),
     );
-    const value = localStorage.getItem("fathom.refresh");
-    if (value && ["0", "30000", "60000", "300000"].includes(value)) setIntervalValue(Number(value));
   }, []);
   useEffect(() => {
     if (!toast) return;
@@ -104,21 +110,35 @@ export function Dashboard() {
         force,
       });
     },
-    enabled: hydrated && watched.length > 0,
-    refetchInterval: interval || false,
+    enabled: hydrated && canSync && watched.length > 0,
+    refetchInterval: canSync ? preferences.refreshInterval || false : false,
     staleTime: 20000,
   });
   const results = useMemo(() => query.data ?? [], [query.data]);
   const summary = portfolioSummary(results, watched.length);
   const byKey = new Map(results.map((r) => [activityKey(r.chain, r.address), r]));
   const networks = new Set(watched.map((w) => w.chain));
-  const filtered = watched.filter(
-    (w) =>
-      (network === "all" || w.chain === network) &&
-      `${w.label} ${w.address} ${CHAINS[w.chain].name} ${CHAINS[w.chain].symbol}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
+  const filtered = watched
+    .filter(
+      (w) =>
+        (network === "all" || w.chain === network) &&
+        `${w.label} ${w.address} ${CHAINS[w.chain].name} ${CHAINS[w.chain].symbol}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+    )
+    .sort((a, b) => {
+      if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+      if (sort === "label")
+        return (a.label || CHAINS[a.chain].name).localeCompare(b.label || CHAINS[b.chain].name);
+      if (sort === "balance") {
+        const av = byKey.get(activityKey(a.chain, a.address))?.usd;
+        const bv = byKey.get(activityKey(b.chain, b.address))?.usd;
+        if (av == null && bv != null) return 1;
+        if (bv == null && av != null) return -1;
+        if (av != null && bv != null && av !== bv) return bv - av;
+      }
+      return b.addedAt - a.addedAt;
+    });
   const transactions = useMemo(() => {
     const list = results.flatMap((r) =>
       r.txs.map((tx, index) => ({
@@ -134,10 +154,14 @@ export function Dashboard() {
     (t) =>
       (network === "all" || t.chain === network) &&
       (direction === "all" || direction === t.direction) &&
-      `${t.hash} ${t.address} ${t.symbol} ${watched.find((w) => activityKey(w.chain, w.address) === activityKey(t.chain, t.address))?.label ?? ""}`
+      `${t.hash} ${t.address} ${t.counterparty} ${t.symbol} ${watched.find((w) => activityKey(w.chain, w.address) === activityKey(t.chain, t.address))?.label ?? ""}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  function openAddress(chain?: ChainId) {
+    setInitialChain(chain);
+    setModal("address");
+  }
   function changeTab(value: Tab) {
     setTab(value);
     setMenu(false);
@@ -148,7 +172,12 @@ export function Dashboard() {
       JSON.stringify(
         {
           version: 1,
-          addresses: watched.map(({ chain, address, label }) => ({ chain, address, label })),
+          addresses: watched.map(({ chain, address, label, pinned }) => ({
+            chain,
+            address,
+            label,
+            ...(pinned ? { pinned: true } : {}),
+          })),
         },
         null,
         2,
@@ -161,41 +190,13 @@ export function Dashboard() {
     try {
       if (file.size > 200000) throw new Error("Watchlist file is too large.");
       const rows = parseWatchlist(JSON.parse(await file.text()));
-      const current = new Set(watched.map((w) => activityKey(w.chain, w.address)));
-      const fresh = rows.filter((r) => !current.has(activityKey(r.chain, r.address)));
-      if (watched.length + fresh.length > 100)
-        throw new Error("Import would exceed 100 addresses.");
-      for (const row of fresh) {
-        const error = addWatched(row);
-        if (error) throw new Error(error);
-      }
-      setToast(
-        `Imported ${fresh.length} addresses; ${rows.length - fresh.length} already watched.`,
-      );
+      const result = addWatchedBatch(rows);
+      if (result.error) throw new Error(result.error);
+      setToast(`Imported ${result.added} addresses; ${result.skipped} already watched.`);
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Could not import watchlist.");
     }
     if (importRef.current) importRef.current.value = "";
-  }
-  function exportTx() {
-    const rows = [
-      ["Network", "Address", "Hash", "Date", "Direction", "Amount", "Asset", "Status"],
-      ...visibleTx.map((t) => [
-        CHAINS[t.chain].name,
-        t.address,
-        t.hash,
-        t.time ? new Date(t.time).toISOString() : "Unconfirmed",
-        t.direction,
-        t.amount,
-        t.symbol,
-        t.status,
-      ]),
-    ];
-    downloadFile(
-      "fathom-transactions.csv",
-      rows.map((r) => r.map(csvCell).join(",")).join("\r\n"),
-      "text/csv;charset=utf-8",
-    );
   }
   async function copy(value: string) {
     try {
@@ -245,6 +246,10 @@ export function Dashboard() {
         <button className="nav-item" onClick={() => setModal("account")}>
           <ShieldCheck size={19} />
           Account & security
+        </button>
+        <button className="nav-item" onClick={() => setModal("settings")}>
+          <Settings size={19} />
+          Workspace settings
         </button>
         <button className="nav-item" onClick={exportWatches}>
           <ArrowDownToLine size={19} />
@@ -297,6 +302,14 @@ export function Dashboard() {
             </span>
           </div>
           <div className="topbar-right">
+            <button
+              className="icon-button"
+              aria-label={preferences.hideBalances ? "Show balances" : "Hide balances"}
+              aria-pressed={preferences.hideBalances}
+              onClick={() => preferences.setHideBalances(!preferences.hideBalances)}
+            >
+              {preferences.hideBalances ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
             <span className="local-badge">
               <span />
               Browser workspace
@@ -306,11 +319,15 @@ export function Dashboard() {
               aria-label="View sync status"
               onClick={() =>
                 setToast(
-                  query.isFetching
-                    ? "Fetching public chain data…"
-                    : query.dataUpdatedAt
-                      ? `Last updated ${new Date(query.dataUpdatedAt).toLocaleTimeString()}. ${summary.unavailable} unavailable.`
-                      : "Add a public address to start tracking.",
+                  !online
+                    ? "You are offline. Displayed data may be out of date."
+                    : preferences.syncPaused
+                      ? "Sync is paused. A refresh already in progress may finish."
+                      : query.isFetching
+                        ? "Fetching public chain data…"
+                        : query.dataUpdatedAt
+                          ? `Last updated ${new Date(query.dataUpdatedAt).toLocaleTimeString()}. ${summary.unavailable} unavailable.`
+                          : "Add a public address to start tracking.",
                 )
               }
             >
@@ -353,12 +370,32 @@ export function Dashboard() {
                 <KeyRound size={16} />
                 Create wallet
               </button>
-              <button className="button primary" onClick={() => setModal("address")}>
+              <button className="button primary" onClick={() => openAddress()}>
                 <Plus size={17} />
                 Add address
               </button>
             </div>
           </div>
+          {(!online || preferences.syncPaused) && (
+            <div className="notice workspace-state" role="status">
+              {!online ? <WifiOff size={18} /> : <Pause size={18} />}
+              <span>
+                {!online
+                  ? "You are offline. Saved watchlists and local wallets are still available; displayed balances may be out of date."
+                  : "Sync paused. Scheduled and manual refreshes are stopped. A refresh already in progress may finish."}
+              </span>
+              {online && preferences.syncPaused && (
+                <button className="text-button" onClick={() => preferences.setSyncPaused(false)}>
+                  Resume sync
+                </button>
+              )}
+            </div>
+          )}
+          {preferences.storageError && (
+            <div className="notice error" role="alert">
+              {preferences.storageError}
+            </div>
+          )}
           {(tab === "Overview" || tab === "Activity") && (
             <>
               <div className="stat-grid">
@@ -368,8 +405,14 @@ export function Dashboard() {
                     <span className="pill">USD</span>
                   </div>
                   <strong>
-                    {summary.priced ? formatUsd(summary.knownUsd) : "—"}
-                    <span className="stat-cents">{summary.priced ? "" : " USD"}</span>
+                    {preferences.hideBalances
+                      ? "••••"
+                      : summary.priced
+                        ? formatUsd(summary.knownUsd)
+                        : "—"}
+                    <span className="stat-cents">
+                      {preferences.hideBalances || summary.priced ? "" : " USD"}
+                    </span>
                   </strong>
                   <small>
                     {watched.length === 0
@@ -427,10 +470,11 @@ export function Dashboard() {
                     Auto-refresh
                     <select
                       aria-label="Auto-refresh interval"
-                      value={interval}
+                      value={preferences.refreshInterval}
                       onChange={(e) => {
-                        setIntervalValue(Number(e.target.value));
-                        localStorage.setItem("fathom.refresh", e.target.value);
+                        preferences.setRefreshInterval(
+                          Number(e.target.value) as 0 | 30000 | 60000 | 300000,
+                        );
                       }}
                     >
                       <option value={30000}>30 seconds</option>
@@ -442,7 +486,7 @@ export function Dashboard() {
                   <button
                     className={`icon-button ${query.isFetching ? "spinning" : ""}`}
                     aria-label="Refresh balances"
-                    disabled={!watched.length || query.isFetching}
+                    disabled={!canSync || !watched.length || query.isFetching}
                     onClick={() => {
                       forceNext.current = true;
                       void query.refetch();
@@ -458,7 +502,11 @@ export function Dashboard() {
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search addresses, labels, or assets"
+                    placeholder={
+                      tab === "Activity"
+                        ? "Search transactions, counterparties, or labels"
+                        : "Search addresses, labels, or assets"
+                    }
                     aria-label="Search workspace"
                   />
                   {search && (
@@ -480,6 +528,18 @@ export function Dashboard() {
                     </option>
                   ))}
                 </select>
+                {tab === "Overview" && (
+                  <select
+                    className="filter-select"
+                    aria-label="Sort addresses"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                  >
+                    <option value="recent">Recently added</option>
+                    <option value="label">Label A–Z</option>
+                    <option value="balance">Highest known USD</option>
+                  </select>
+                )}
                 {tab === "Activity" && (
                   <select
                     className="filter-select"
@@ -497,7 +557,14 @@ export function Dashboard() {
               {query.isError && (
                 <div className="notice error" role="alert">
                   Could not update this workspace. {query.error.message}{" "}
-                  <button onClick={() => void query.refetch()}>Try again</button>
+                  <button
+                    disabled={!canSync}
+                    onClick={() => {
+                      if (canSync) void query.refetch();
+                    }}
+                  >
+                    Try again
+                  </button>
                 </div>
               )}
               {tab === "Overview" ? (
@@ -524,14 +591,18 @@ export function Dashboard() {
                           Add a public address to bring its balance and recent transactions into
                           your workspace.
                         </p>
-                        <button className="button primary" onClick={() => setModal("address")}>
+                        <button className="button primary" onClick={() => openAddress()}>
                           <Plus size={17} />
                           Watch your first address
                         </button>
                         <button
                           className="text-button"
                           onClick={() => {
-                            EXAMPLES.forEach((row) => addWatched(row));
+                            const result = addWatchedBatch(EXAMPLES);
+                            if (result.error) {
+                              setToast(result.error);
+                              return;
+                            }
                             setToast(
                               "Added two public example addresses. Public providers may rate-limit requests.",
                             );
@@ -544,7 +615,10 @@ export function Dashboard() {
                       filtered.map((w) => {
                         const data = byKey.get(activityKey(w.chain, w.address));
                         return (
-                          <article className="address-card" key={w.id}>
+                          <article
+                            className={`address-card ${w.pinned ? "pinned-address" : ""}`}
+                            key={w.id}
+                          >
                             <div className="address-card-top">
                               <ChainIcon chain={w.chain} />
                               <div className="address-identity">
@@ -555,20 +629,43 @@ export function Dashboard() {
                                   {w.walletId ? "Local wallet" : "Watch-only"}
                                 </span>
                               </div>
-                              <button
-                                className="icon-button remove-address"
-                                aria-label={`Remove ${w.label || w.address}`}
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      "Remove this address from the watchlist? Wallet keys will not be deleted.",
+                              <div className="address-tools">
+                                <button
+                                  className="icon-button"
+                                  aria-label={`${w.pinned ? "Unpin" : "Pin"} ${w.label || w.address}`}
+                                  aria-pressed={Boolean(w.pinned)}
+                                  onClick={() => {
+                                    const failure = togglePinned(w.id);
+                                    if (failure) setToast(failure);
+                                  }}
+                                >
+                                  <Pin size={15} />
+                                </button>
+                                <button
+                                  className="icon-button"
+                                  aria-label={`Edit label for ${w.label || w.address}`}
+                                  onClick={() => {
+                                    setEditing(w);
+                                    setModal("edit");
+                                  }}
+                                >
+                                  <Pencil size={15} />
+                                </button>
+                                <button
+                                  className="icon-button remove-address"
+                                  aria-label={`Remove ${w.label || w.address}`}
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        "Remove this address from the watchlist? Wallet keys will not be deleted.",
+                                      )
                                     )
-                                  )
-                                    removeWatched(w.id);
-                                }}
-                              >
-                                <Trash2 size={15} />
-                              </button>
+                                      removeWatched(w.id);
+                                  }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
                             </div>
                             <div className="address-body">
                               <div className="address-public">
@@ -592,13 +689,19 @@ export function Dashboard() {
                               </div>
                               <div className="address-balance">
                                 <strong>
-                                  {data?.ok ? data.balance : "—"}{" "}
+                                  {preferences.hideBalances
+                                    ? "••••"
+                                    : data?.ok
+                                      ? data.balance
+                                      : "—"}{" "}
                                   <small>{CHAINS[w.chain].symbol}</small>
                                 </strong>
                                 <span>
-                                  {data?.usd != null
-                                    ? formatUsd(data.usd)
-                                    : "USD value unavailable"}
+                                  {preferences.hideBalances
+                                    ? "Hidden"
+                                    : data?.usd != null
+                                      ? formatUsd(data.usd)
+                                      : "USD value unavailable"}
                                 </span>
                               </div>
                             </div>
@@ -663,8 +766,9 @@ export function Dashboard() {
                             </div>
                             <div className="tx-value">
                               <strong>
-                                {t.direction === "in" ? "+" : t.direction === "out" ? "−" : ""}
-                                {t.amount}
+                                {preferences.hideBalances
+                                  ? "••••"
+                                  : `${t.direction === "in" ? "+" : t.direction === "out" ? "−" : ""}${t.amount}`}
                               </strong>
                               <small>
                                 {t.status === "failed"
@@ -697,99 +801,32 @@ export function Dashboard() {
                     )}
                     <div className="panel-footer">
                       <span className="status-dot" />{" "}
-                      {query.isFetching
-                        ? "Updating public data…"
-                        : query.dataUpdatedAt
-                          ? `Updated ${relativeTime(query.dataUpdatedAt)}`
-                          : "Ready when you are"}
+                      {!online
+                        ? "Offline · data may be out of date"
+                        : preferences.syncPaused
+                          ? "Sync paused"
+                          : query.isFetching
+                            ? "Updating public data…"
+                            : query.dataUpdatedAt
+                              ? `Updated ${relativeTime(query.dataUpdatedAt)}`
+                              : "Ready when you are"}
                     </div>
                   </section>
                 </div>
               ) : (
-                <section className="panel transaction-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <h2>Transaction history</h2>
-                      <p>
-                        Native transfers and indexed tokens where available. One row per watched
-                        address.
-                      </p>
-                    </div>
-                    <button
-                      className="button secondary small-button"
-                      disabled={!visibleTx.length}
-                      onClick={exportTx}
-                    >
-                      <ArrowDownToLine size={15} />
-                      Export CSV
-                    </button>
-                  </div>
-                  {visibleTx.length ? (
-                    <div className="table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Transaction</th>
-                            <th>Network / address</th>
-                            <th>Amount</th>
-                            <th>When</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleTx.map((t) => (
-                            <tr key={t.id}>
-                              <td>
-                                <a
-                                  href={CHAINS[t.chain].txUrl(t.hash)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <span className={`table-direction ${t.direction}`}>
-                                    {t.direction === "in" ? (
-                                      <ArrowDownLeft size={16} />
-                                    ) : (
-                                      <ArrowUpRight size={16} />
-                                    )}
-                                  </span>
-                                  {shortAddress(t.hash)} <ExternalLink size={12} />
-                                </a>
-                              </td>
-                              <td>
-                                {CHAINS[t.chain].name}
-                                <small>{shortAddress(t.address)}</small>
-                              </td>
-                              <td className={t.direction === "in" ? "emphasis-text" : ""}>
-                                {t.direction === "in" ? "+" : t.direction === "out" ? "−" : ""}
-                                {t.amount} {t.symbol}
-                              </td>
-                              <td>{relativeTime(t.time)}</td>
-                              <td>
-                                <span className={`pill ${t.status === "failed" ? "failure" : ""}`}>
-                                  {t.status === "failed"
-                                    ? "Failed"
-                                    : t.status === "pending"
-                                      ? "Pending"
-                                      : "Observed"}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="empty-panel compact">
-                      <Activity size={30} />
-                      <h3>No transactions to show</h3>
-                      <p>
-                        {watched.length
-                          ? "Try a different filter, refresh, or check provider availability on Overview."
-                          : "Add an address to load its recent activity."}
-                      </p>
-                    </div>
-                  )}
-                </section>
+                <TransactionExplorer
+                  transactions={transactions}
+                  watches={watched}
+                  search={search}
+                  network={network}
+                  direction={direction}
+                  hideBalances={preferences.hideBalances}
+                  onResetFilters={() => {
+                    setSearch("");
+                    setNetwork("all");
+                    setDirection("all");
+                  }}
+                />
               )}
             </>
           )}
@@ -854,7 +891,7 @@ export function Dashboard() {
               </div>
               <div className="network-grid">
                 {CHAIN_IDS.map((id) => (
-                  <NetworkCard key={id} chain={id} onAdd={() => setModal("address")} />
+                  <NetworkCard key={id} chain={id} onAdd={() => openAddress(id)} />
                 ))}
               </div>
             </>
@@ -905,22 +942,43 @@ export function Dashboard() {
                 ? "Add a public address"
                 : modal === "wallet"
                   ? "Local wallets"
-                  : "Account and security"}
+                  : modal === "settings"
+                    ? "Workspace settings"
+                    : modal === "edit"
+                      ? "Edit address label"
+                      : "Account and security"}
             </Dialog.Title>
             <Dialog.Description className="sr-only" id="modal-description">
               {modal === "address"
                 ? "Watch a public blockchain address. No private keys needed."
                 : modal === "wallet"
                   ? "Create, unlock, and back up local encrypted wallets."
-                  : "Manage sign-in methods and two-factor authentication."}
+                  : modal === "settings"
+                    ? "Manage privacy and public-data syncing on this browser."
+                    : modal === "edit"
+                      ? "Rename a watched address."
+                      : "Manage sign-in methods and two-factor authentication."}
             </Dialog.Description>
             <Dialog.Close className="dialog-close icon-button" aria-label="Close dialog">
               <X size={20} />
             </Dialog.Close>
             {modal === "address" ? (
-              <AddAddress
+              <AddressEntry
+                initialChain={initialChain}
                 onClose={() => setModal(null)}
-                onAdded={() => setToast("Address added. Fetching public activity…")}
+                onAdded={setToast}
+              />
+            ) : modal === "edit" && editing ? (
+              <EditAddressLabel
+                address={editing}
+                onClose={() => setModal(null)}
+                onSaved={() => setToast("Address label updated.")}
+              />
+            ) : modal === "settings" ? (
+              <WorkspaceSettings
+                onClose={() => setModal(null)}
+                onExportWatchlist={exportWatches}
+                onOpenWallet={() => setModal("wallet")}
               />
             ) : modal === "wallet" ? (
               <WalletPanel onClose={() => setModal(null)} />
@@ -992,133 +1050,5 @@ function NetworkCard({ chain, onAdd }: { chain: ChainId; onAdd: () => void }) {
         Watch an address <Plus size={14} />
       </button>
     </article>
-  );
-}
-function AddAddress({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [chain, setChain] = useState<ChainId>("ethereum");
-  const [address, setAddress] = useState("");
-  const [label, setLabel] = useState("");
-  const [error, setError] = useState("");
-  const [ack, setAck] = useState(false);
-  const addWatched = useLedger((s) => s.addWatched);
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    if (!ack) {
-      setError("Acknowledge public provider access to continue.");
-      return;
-    }
-    const err = addWatched({ chain, address, label });
-    if (err) {
-      setError(err);
-      return;
-    }
-    onAdded();
-    onClose();
-  }
-  function pasteAddress(value: string) {
-    setAddress(value);
-    const family = detectFamily(value);
-    if (family === "bitcoin" || family === "solana") setChain(family);
-    else if (family === "evm" && CHAINS[chain].family !== "evm") setChain("ethereum");
-  }
-  return (
-    <form onSubmit={submit} className="add-address-form">
-      <span className="modal-symbol">
-        <Plus size={24} />
-      </span>
-      <span className="eyebrow">WATCH, WITHOUT CONNECTING</span>
-      <h2>Add a public address</h2>
-      <p>
-        Its balance and recent activity arrive automatically. No wallet connection or private key
-        needed.
-      </p>
-      <label>
-        Network
-        <select
-          aria-label="Network"
-          className="form-input"
-          value={chain}
-          onChange={(e) => setChain(e.target.value as ChainId)}
-        >
-          {CHAIN_IDS.map((id) => (
-            <option key={id} value={id}>
-              {CHAINS[id].name} · {CHAINS[id].symbol}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Public address
-        <input
-          className="form-input mono"
-          placeholder="Paste your public wallet address"
-          value={address}
-          maxLength={160}
-          onChange={(e) => pasteAddress(e.target.value)}
-          required
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </label>
-      {address && (
-        <span
-          className={
-            isValidAddress(chain, address)
-              ? "emphasis-text validation-message"
-              : "muted validation-message"
-          }
-        >
-          {isValidAddress(chain, address) ? (
-            <>
-              <Check size={13} />
-              Address format matches {CHAINS[chain].name}
-            </>
-          ) : (
-            "Check the address and selected network."
-          )}
-        </span>
-      )}
-      <label>
-        Label <span className="optional">optional</span>
-        <input
-          className="form-input"
-          placeholder="e.g. Long-term holdings"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          maxLength={80}
-        />
-      </label>
-      <label className="checkbox-label">
-        <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
-        <span>
-          I understand this address will be queried with public blockchain providers. This does not
-          verify ownership.
-        </span>
-      </label>
-      {["monero", "polkadot", "kusama"].includes(chain) && (
-        <div className="notice">
-          {chain === "monero"
-            ? "Monero hides transaction details. An address alone cannot show balance or history. This address will be saved without public data."
-            : "Native free balances can be queried. Transaction history requires an indexer; use the linked explorer."}
-        </div>
-      )}
-      {error && (
-        <div className="notice error" role="alert">
-          {error}
-        </div>
-      )}
-      <button
-        className="button primary full-width"
-        disabled={!ack || !isValidAddress(chain, address)}
-      >
-        <Plus size={17} />
-        Add to workspace
-      </button>
-      <div className="form-footnote">
-        <ShieldCheck size={13} />
-        Never paste a recovery phrase or private key here.
-      </div>
-    </form>
   );
 }

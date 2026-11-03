@@ -108,6 +108,8 @@ svg.lucide {
   min-height: 100vh;
 }
 .sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
   position: fixed;
   inset: 0 auto 0 0;
   width: 238px;

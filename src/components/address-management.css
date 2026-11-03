@@ -1,0 +1,102 @@
+.address-mode {
+  display: flex;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  padding: 3px;
+  gap: 3px;
+  background: var(--ui-background);
+}
+.address-mode button {
+  flex: 1;
+  border: 1px solid transparent;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
+  padding: 9px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+.address-mode button[aria-pressed="true"] {
+  border-color: var(--ui-border);
+  color: var(--ui-text-3);
+  font-weight: 650;
+}
+.bulk-address-input {
+  resize: vertical;
+  min-height: 160px;
+  font-size: 11px;
+  line-height: 1.9;
+}
+.address-entry-help {
+  font-size: 10px !important;
+  color: var(--ui-text-2);
+  margin: 0;
+  line-height: 1.7;
+}
+.full-public-address {
+  display: block;
+  margin-top: 9px;
+  word-break: break-all;
+  font-size: 11px;
+  color: var(--ui-text-2);
+}
+.address-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.address-tools .icon-button {
+  padding: 6px;
+}
+.address-tools .icon-button[aria-pressed="true"] {
+  outline: 1px solid var(--ui-border);
+  outline-offset: -2px;
+}
+.address-card.pinned-address {
+  border-left-width: 3px;
+}
+.workspace-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.workspace-state > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.workspace-state .text-button {
+  margin-left: auto;
+  white-space: nowrap;
+  align-self: center;
+}
+.balance-hidden {
+  letter-spacing: 2px;
+}
+.topbar-right .icon-button[aria-pressed="true"] {
+  outline: 1px solid var(--ui-border);
+}
+@media (max-width: 650px) {
+  .address-tools {
+    gap: 0;
+  }
+  .address-tools .icon-button {
+    padding: 5px;
+  }
+  .workspace-state {
+    font-size: 10px;
+    flex-wrap: wrap;
+  }
+  .workspace-state .text-button {
+    margin-left: 27px;
+  }
+  .topbar-right {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 650px) {
+  .topbar-right .local-badge {
+    display: none;
+  }
+}
