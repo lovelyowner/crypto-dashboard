@@ -304,6 +304,21 @@ export type ChainId = keyof typeof CHAINS;
 export const CHAIN_IDS = Object.keys(CHAINS) as ChainId[];
 export const EVM_CHAIN_IDS = CHAIN_IDS.filter((id) => CHAINS[id].family === "evm");
 
+/** A network's associated token standard is a display label, not a claim of complete token coverage. */
+export function chainTokenStandard(id: ChainId): "ERC20" | "BEP20" | "SPL" | null {
+  if (id === "bnb") return "BEP20";
+  if (CHAINS[id].family === "evm") return "ERC20";
+  if (id === "solana") return "SPL";
+  return null;
+}
+
+/** Keep chain IDs and native symbols unchanged; use this richer label in the interface. */
+export function chainLabel(id: ChainId): string {
+  const chain = CHAINS[id];
+  const standard = chainTokenStandard(id);
+  return `${chain.name} · ${chain.symbol}${standard ? ` (${standard})` : ""}`;
+}
+
 export function isChainId(value: string): value is ChainId {
   return Object.prototype.hasOwnProperty.call(CHAINS, value);
 }

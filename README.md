@@ -58,6 +58,18 @@ Install the browser for UI tests with `npx playwright install chromium`. Browser
 - Email/password and Unicode username login, authenticator enrollment with verification, single-use recovery codes, server-enforced session limits, account linking, and direct Google/Discord/Twitter adapters when configured.
 - Responsive desktop/mobile layout and keyboard-accessible dialogs.
 
+## TXT address import and dates
+
+Choose **Import TXT addresses** in the sidebar, or **Add address → Upload TXT**. The importer reads the UTF-8 file locally (up to 200 KB and 100 address entries), shows detected networks, validates every row, and adds the complete batch after your confirmation. Duplicate addresses on the same network are skipped. Blank lines and `#` comment lines are ignored.
+
+Each line can contain a public address alone, `address, Optional label`, or an explicit network hint such as `ethereum:address, Label`, `base:address`, or `ETH (ERC20),address, Label`. Bitcoin, supported Cosmos prefixes, XRP, Solana, named NEAR `.near` accounts, Monero, and network-specific SS58 formats can be matched automatically. A matching format does not prove ownership or that an account has activity.
+
+An EVM `0x` address does not reveal which chain it belongs to. Select the intended network once for unassigned EVM rows, or select per row. Explicit hints in the file retain their network. Generic SS58 needs a Polkadot/Kusama choice. Bare 64-digit hexadecimal values are never auto-imported as NEAR because they can look like private keys; only confirm a NEAR public implicit-account identifier. Other NEAR account names need an explicit `near:` hint. Never upload private keys or recovery phrases.
+
+Network labels now include the ticker and token standard, for example **Ethereum · ETH (ERC20)**, **BNB Smart Chain · BNB (BEP20)**, and **Solana · SOL (SPL)**. These labels identify the network standard; they do not imply complete token indexing. ETH remains the native coin, distinct from ERC20 tokens.
+
+Transaction dates in the table and recent-activity feed use **dd.mm.yy in UTC**, such as `01.01.26`. CSV exports include that readable date plus the full UTC timestamp, and table tooltips retain full timing information. Sync-status timestamps still use relative wording.
+
 ## Limits that matter
 
 Tracking queries public third-party APIs directly from the browser. This shares queried addresses and the client's IP with those providers. CORS restrictions, outages, and rate limits can make data unavailable. Native balances are not full portfolio valuations: token/NFT holdings, staking, internal calls, and complete historical indexing are outside this version. Transactions involving two watched addresses appear once per address. USD totals include only successfully priced addresses and are labeled accordingly.

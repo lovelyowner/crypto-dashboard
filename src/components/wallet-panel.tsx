@@ -12,7 +12,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { CHAINS, EVM_CHAIN_IDS, type ChainId } from "@/lib/chains";
+import { CHAINS, EVM_CHAIN_IDS, chainLabel, type ChainId } from "@/lib/chains";
 import { useLedger, type LocalWallet } from "@/lib/ledger-store";
 import {
   addressesFromMnemonic,
@@ -616,7 +616,7 @@ function WalletCard({ wallet }: { wallet: LocalWallet }) {
           ([chain, address]) =>
             address && (
               <div key={chain}>
-                <span>{CHAINS[chain as ChainId].name}</span>
+                <span>{chainLabel(chain as ChainId)}</span>
                 <code>{address}</code>
                 <small>{DERIVATION_PATHS[chain as keyof WalletAddresses]}</small>
                 <button

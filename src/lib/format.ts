@@ -46,3 +46,14 @@ export function relativeTime(ms: number): string {
   if (delta < 14 * day) return `${Math.floor(delta / day)}d ago`;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(ms);
 }
+
+/** Transaction calendar dates use UTC consistently across browsers and CSV exports. */
+export function formatTransactionDate(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "Unconfirmed";
+  const date = new Date(ms);
+  if (!Number.isFinite(date.getTime())) return "Unconfirmed";
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear()).slice(-2).padStart(2, "0");
+  return `${day}.${month}.${year}`;
+}

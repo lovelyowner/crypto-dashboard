@@ -1,20 +1,31 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Check, ListPlus, Plus, ShieldCheck } from "lucide-react";
-import { CHAINS, CHAIN_IDS, detectFamily, isValidAddress, type ChainId } from "@/lib/chains";
+import {
+  CHAINS,
+  CHAIN_IDS,
+  chainLabel,
+  detectFamily,
+  isValidAddress,
+  type ChainId,
+} from "@/lib/chains";
 import { useLedger, type WatchedAddress } from "@/lib/ledger-store";
 import { parseAddressLines } from "@/lib/watchlist";
+import { TextAddressImport } from "./text-address-import";
+import { parseAddressText } from "@/lib/address-import";
 import "./address-management.css";
 
 export function AddressEntry({
   onClose,
   onAdded,
   initialChain,
+  initialMode = "single",
 }: {
   onClose: () => void;
   onAdded: (message: string) => void;
   initialChain?: ChainId;
+  initialMode?: "single" | "file";
 }) {
-  const [mode, setMode] = useState<"single" | "bulk">("single");
+  const [mode, setMode] = useState<"single" | "bulk" | "file">(initialMode);
   const [chain, setChain] = useState<ChainId>(initialChain ?? "ethereum");
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("");
@@ -65,10 +76,44 @@ export function AddressEntry({
   }
   function paste(value: string) {
     setAddress(value);
+    try {
+      const rows = parseAddressText(value);
+      if (rows.length === 1 && rows[0]?.suggestedChain) {
+        setChain(rows[0].suggestedChain);
+        return;
+      }
+    } catch {
+      /* Incomplete input can still be typed normally. */
+    }
     const family = detectFamily(value);
     if (family === "bitcoin" || family === "solana") setChain(family);
     else if (family === "evm" && CHAINS[chain].family !== "evm") setChain("ethereum");
   }
+  const modeButtons = (
+    <div className="address-mode" role="group" aria-label="Address entry mode">
+      {(
+        [
+          ["single", "Single address"],
+          ["bulk", "Bulk add"],
+          ["file", "Upload TXT"],
+        ] as const
+      ).map(([value, title]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={mode === value}
+          onClick={() => {
+            setMode(value);
+            setError("");
+          }}
+        >
+          {title}
+        </button>
+      ))}
+    </div>
+  );
+  if (mode === "file")
+    return <TextAddressImport navigation={modeButtons} onClose={onClose} onAdded={onAdded} />;
   return (
     <form onSubmit={submit} className="add-address-form">
       <span className="modal-symbol">
@@ -77,28 +122,7 @@ export function AddressEntry({
       <span className="eyebrow">WATCH, WITHOUT CONNECTING</span>
       <h2>{mode === "single" ? "Add a public address" : "Add addresses in bulk"}</h2>
       <p>Watch public balances and recent activity. No wallet connection or private key needed.</p>
-      <div className="address-mode" role="group" aria-label="Address entry mode">
-        <button
-          type="button"
-          aria-pressed={mode === "single"}
-          onClick={() => {
-            setMode("single");
-            setError("");
-          }}
-        >
-          Single address
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "bulk"}
-          onClick={() => {
-            setMode("bulk");
-            setError("");
-          }}
-        >
-          Bulk add
-        </button>
-      </div>
+      {modeButtons}
       <label>
         Network
         <select
@@ -109,7 +133,7 @@ export function AddressEntry({
         >
           {CHAIN_IDS.map((id) => (
             <option key={id} value={id}>
-              {CHAINS[id].name} · {CHAINS[id].symbol}
+              {chainLabel(id)}
             </option>
           ))}
         </select>
@@ -261,7 +285,7 @@ export function EditAddressLabel({
       <h2>Edit address label</h2>
       <p>Rename this entry without changing the address or its linked wallet.</p>
       <div className="notice">
-        <strong>{CHAINS[address.chain].name}</strong>
+        <strong>{chainLabel(address.chain)}</strong>
         <code className="full-public-address">{address.address}</code>
       </div>
       <label>

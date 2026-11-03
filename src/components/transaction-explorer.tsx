@@ -10,8 +10,8 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { CHAINS, CHAIN_IDS, activityKey } from "@/lib/chains";
-import { relativeTime, shortAddress } from "@/lib/format";
+import { CHAINS, CHAIN_IDS, activityKey, chainLabel } from "@/lib/chains";
+import { formatTransactionDate, shortAddress } from "@/lib/format";
 import { downloadFile } from "@/lib/portfolio";
 import {
   filterTransactions,
@@ -101,7 +101,8 @@ export function TransactionExplorer({
           <h2>Transaction history</h2>
           <p>
             Recent native transfers and indexed tokens where available. One row per watched address;
-            this is not complete chain history.
+            this is not complete chain history. Token-standard labels identify the network; asset
+            coverage varies by provider.
           </p>
         </div>
         <button
@@ -146,7 +147,7 @@ export function TransactionExplorer({
               <option value="all">All networks</option>
               {CHAIN_IDS.map((id) => (
                 <option value={id} key={id}>
-                  {CHAINS[id].name}
+                  {chainLabel(id)}
                 </option>
               ))}
             </select>
@@ -180,7 +181,7 @@ export function TransactionExplorer({
                 key={activityKey(watch.chain, watch.address)}
                 value={activityKey(watch.chain, watch.address)}
               >
-                {watch.label || shortAddress(watch.address)} · {CHAINS[watch.chain].name} ·{" "}
+                {watch.label || shortAddress(watch.address)} · {chainLabel(watch.chain)} ·{" "}
                 {shortAddress(watch.address)}
               </option>
             ))}
@@ -245,7 +246,7 @@ export function TransactionExplorer({
                 <th scope="col">Transaction</th>
                 <th scope="col">Network / watched address</th>
                 <th scope="col">Amount</th>
-                <th scope="col">When</th>
+                <th scope="col">Date (UTC)</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
@@ -269,7 +270,7 @@ export function TransactionExplorer({
                         href={CHAINS[tx.chain].txUrl(tx.hash)}
                         target="_blank"
                         rel="noreferrer"
-                        aria-label={`View ${tx.hash} in ${CHAINS[tx.chain].name} explorer`}
+                        aria-label={`View ${tx.hash} in ${chainLabel(tx.chain)} explorer`}
                       >
                         <span className="table-direction">
                           {tx.direction === "in" ? (
@@ -288,7 +289,7 @@ export function TransactionExplorer({
                       </small>
                     </td>
                     <td>
-                      {CHAINS[tx.chain].name}
+                      {chainLabel(tx.chain)}
                       <small title={tx.address}>
                         {label ? `${label} · ` : ""}
                         {shortAddress(tx.address)}
@@ -308,11 +309,9 @@ export function TransactionExplorer({
                     <td>
                       <time
                         dateTime={timestamp}
-                        title={
-                          timestamp ? new Date(timestamp).toLocaleString() : "Timestamp unavailable"
-                        }
+                        title={timestamp ? `${timestamp} (UTC)` : "Timestamp unavailable"}
                       >
-                        {timestamp ? relativeTime(tx.time) : "Unconfirmed"}
+                        {formatTransactionDate(tx.time)}
                       </time>
                     </td>
                     <td>

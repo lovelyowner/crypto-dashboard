@@ -20,6 +20,7 @@ import {
   Pause,
   WifiOff,
   ExternalLink,
+  FileUp,
   Globe2,
   KeyRound,
   LayoutDashboard,
@@ -33,10 +34,10 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { CHAINS, CHAIN_IDS, activityKey, type ChainId } from "@/lib/chains";
+import { CHAINS, CHAIN_IDS, chainLabel, activityKey, type ChainId } from "@/lib/chains";
 import { fetchActivity } from "@/lib/activity.functions";
 import { useLedger, type WatchedAddress } from "@/lib/ledger-store";
-import { formatUsd, relativeTime, shortAddress } from "@/lib/format";
+import { formatUsd, formatTransactionDate, relativeTime, shortAddress } from "@/lib/format";
 import { downloadFile, parseWatchlist, portfolioSummary } from "@/lib/portfolio";
 import { AddressEntry, EditAddressLabel } from "./address-entry";
 import { TransactionExplorer } from "./transaction-explorer";
@@ -74,6 +75,7 @@ export function Dashboard() {
   const [sort, setSort] = useState("recent");
   const [editing, setEditing] = useState<WatchedAddress | null>(null);
   const [initialChain, setInitialChain] = useState<ChainId | undefined>();
+  const [entryMode, setEntryMode] = useState<"single" | "file">("single");
   const { user } = useCurrentUserState();
   const [tab, setTab] = useState<Tab>("Overview");
   const [modal, setModal] = useState<Modal>(null);
@@ -158,8 +160,9 @@ export function Dashboard() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  function openAddress(chain?: ChainId) {
+  function openAddress(chain?: ChainId, mode: "single" | "file" = "single") {
     setInitialChain(chain);
+    setEntryMode(mode);
     setModal("address");
   }
   function changeTab(value: Tab) {
@@ -254,6 +257,10 @@ export function Dashboard() {
         <button className="nav-item" onClick={exportWatches}>
           <ArrowDownToLine size={19} />
           Export watchlist
+        </button>
+        <button className="nav-item" onClick={() => openAddress(undefined, "file")}>
+          <FileUp size={19} />
+          Import TXT addresses
         </button>
         <button className="nav-item" onClick={() => importRef.current?.click()}>
           <Upload size={19} />
@@ -524,7 +531,7 @@ export function Dashboard() {
                   <option value="all">All networks</option>
                   {CHAIN_IDS.map((id) => (
                     <option value={id} key={id}>
-                      {CHAINS[id].name}
+                      {chainLabel(id)}
                     </option>
                   ))}
                 </select>
@@ -624,7 +631,7 @@ export function Dashboard() {
                               <div className="address-identity">
                                 <h3>{w.label || CHAINS[w.chain].name + " address"}</h3>
                                 <span>
-                                  {CHAINS[w.chain].name}
+                                  {chainLabel(w.chain)}
                                   <span className="tiny-dot" />
                                   {w.walletId ? "Local wallet" : "Watch-only"}
                                 </span>
@@ -761,7 +768,7 @@ export function Dashboard() {
                                 {t.symbol}
                               </strong>
                               <small>
-                                {CHAINS[t.chain].name} · {relativeTime(t.time)}
+                                {chainLabel(t.chain)} · {formatTransactionDate(t.time)}
                               </small>
                             </div>
                             <div className="tx-value">
@@ -965,6 +972,7 @@ export function Dashboard() {
             {modal === "address" ? (
               <AddressEntry
                 initialChain={initialChain}
+                initialMode={entryMode}
                 onClose={() => setModal(null)}
                 onAdded={setToast}
               />
@@ -1038,10 +1046,7 @@ function NetworkCard({ chain, onAdd }: { chain: ChainId; onAdd: () => void }) {
           {mode}
         </span>
       </div>
-      <h3>
-        {c.name}
-        <span>{c.symbol}</span>
-      </h3>
+      <h3>{chainLabel(chain)}</h3>
       <p>
         {meta.note ||
           "Public balance and recent indexed transactions. Provider availability may vary."}

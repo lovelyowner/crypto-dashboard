@@ -1,6 +1,7 @@
-import { CHAINS, activityKey, type ChainId } from "./chains";
+import { chainLabel, activityKey, type ChainId } from "./chains";
 import type { ActivityTx } from "./activity.functions";
 import { csvCell } from "./portfolio";
+import { formatTransactionDate } from "./format";
 
 export type ExplorerTransaction = ActivityTx & { id: string; chain: ChainId; address: string };
 export type TransactionWatch = { chain: ChainId; address: string; label: string };
@@ -70,7 +71,7 @@ export function filterTransactions(
             tx.counterparty,
             tx.symbol,
             tx.chain,
-            CHAINS[tx.chain].name,
+            chainLabel(tx.chain),
             labels.get(activityKey(tx.chain, tx.address)) || "",
           ].join(" "),
         ).includes(query)
@@ -94,7 +95,8 @@ export function transactionsCsv(
     "Watched label",
     "Watched address",
     "Transaction hash",
-    "Timestamp",
+    "Date (dd.mm.yy, UTC)",
+    "Timestamp (UTC)",
     "Direction",
     "Amount",
     "Asset",
@@ -104,10 +106,11 @@ export function transactionsCsv(
   return [
     columns,
     ...rows.map((tx) => [
-      CHAINS[tx.chain].name,
+      chainLabel(tx.chain),
       labels.get(activityKey(tx.chain, tx.address)) || "",
       tx.address,
       tx.hash,
+      formatTransactionDate(tx.time),
       transactionTimeIso(tx.time) ?? "Unconfirmed",
       tx.direction,
       tx.amount,

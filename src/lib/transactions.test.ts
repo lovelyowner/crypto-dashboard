@@ -171,6 +171,10 @@ test("CSV exports exactly the filtered rows with exact amounts and formula-safe 
   const recentCsv = transactionsCsv([transactions[0]], watches);
   assert(recentCsv.includes('"0.123456789012345678"'));
   assert(recentCsv.includes(new Date(now - hour).toISOString()));
+  assert(recentCsv.includes('"Date (dd.mm.yy, UTC)"'));
+  assert(recentCsv.includes('"Timestamp (UTC)"'));
+  assert(recentCsv.includes('"03.11.26"'));
+  assert(recentCsv.includes('"Ethereum · ETH (ERC20)"'));
 });
 
 test("invalid provider timestamps cannot crash transaction rendering or CSV export", () => {

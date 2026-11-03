@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-isolation=none src/lib/*.test.ts src/lib/wallet/*.test.ts src/lib/auth/*.test.ts",
     "lint": "eslint src vite.config.ts",
-    "test:e2e": "node tests/browser.mjs && node tests/workspace-browser.mjs",
+    "test:e2e": "node tests/browser.mjs && node tests/workspace-browser.mjs && node tests/txt-import-browser.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "test:auth": "node scripts/auth-integration.mjs",
     "build:site": "vite build --config vite.static.config.ts && node scripts/package-site.mjs"
