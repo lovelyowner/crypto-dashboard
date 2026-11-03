@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { ChainId } from "@/lib/chains";
+import { activityKey, type ChainId } from "@/lib/chains";
 import {
   normalizeWatchLabel,
   planWatchBatch,
@@ -31,6 +31,9 @@ export type LocalWallet = {
   identityMethod?: "account" | "yoti";
 };
 
+export type RemoveWatchedResult = { removed: WatchedAddress[]; error: string | null };
+export type RestoreWatchedResult = { restored: number; skipped: number; error: string | null };
+
 type LedgerState = {
   watched: WatchedAddress[];
   wallets: LocalWallet[];
@@ -40,7 +43,9 @@ type LedgerState = {
   addWatchedBatch: (inputs: WatchedInput[]) => BatchAddResult;
   updateWatchedLabel: (id: string, label: string) => string | null;
   togglePinned: (id: string) => string | null;
-  removeWatched: (id: string) => void;
+  removeWatched: (id: string) => string | null;
+  removeWatchedBatch: (ids: string[]) => RemoveWatchedResult;
+  restoreWatchedBatch: (entries: WatchedAddress[]) => RestoreWatchedResult;
   addWallet: (wallet: LocalWallet) => void;
   updateWallet: (id: string, patch: Partial<LocalWallet>) => void;
   removeWallet: (id: string) => void;
@@ -137,7 +142,113 @@ export const useLedger = create<LedgerState>()(
           return "Could not save this pinned-address setting in browser storage.";
         }
       },
-      removeWatched: (id) => set({ watched: get().watched.filter((item) => item.id !== id) }),
+      removeWatched: (id) => get().removeWatchedBatch([id]).error,
+      removeWatchedBatch: (ids) => {
+        const before = get().watched;
+        try {
+          if (
+            !Array.isArray(ids) ||
+            ids.length > 1000 ||
+            ids.some((id) => typeof id !== "string" || !id || id.length > 120 || id.trim() !== id)
+          )
+            throw new Error("Choose valid addresses from this watchlist.");
+          const selected = new Set(ids);
+          if (selected.size > 100) throw new Error("Remove up to 100 addresses at a time.");
+          const removed = before.filter((entry) => selected.has(entry.id));
+          if (removed.length) set({ watched: before.filter((entry) => !selected.has(entry.id)) });
+          return { removed: removed.map((entry) => ({ ...entry })), error: null };
+        } catch (error) {
+          if (get().watched !== before) {
+            try {
+              set({ watched: before });
+            } catch {
+              /* The in-memory rollback precedes persistence. */
+            }
+            return {
+              removed: [],
+              error: "Could not save the watchlist in this browser. No addresses were removed.",
+            };
+          }
+          return {
+            removed: [],
+            error: error instanceof Error ? error.message : "Could not remove these addresses.",
+          };
+        }
+      },
+      restoreWatchedBatch: (entries) => {
+        const before = get().watched;
+        try {
+          if (!Array.isArray(entries) || entries.length > 100)
+            throw new Error("Restore up to 100 addresses at a time.");
+          const knownIds = new Set(before.map((entry) => entry.id));
+          const knownAddresses = new Set(
+            before.map((entry) => activityKey(entry.chain, entry.address)),
+          );
+          const walletIds = new Set(get().wallets.map((wallet) => wallet.id));
+          const restored: WatchedAddress[] = [];
+          let skipped = 0;
+          // Validate the full payload, including entries that may prove to be duplicates.
+          const normalized = entries.map((entry) => {
+            if (
+              !entry ||
+              typeof entry.id !== "string" ||
+              !entry.id ||
+              entry.id.length > 120 ||
+              entry.id.trim() !== entry.id ||
+              !Number.isFinite(entry.addedAt) ||
+              entry.addedAt < 0 ||
+              !Number.isFinite(new Date(entry.addedAt).getTime())
+            ) {
+              throw new Error(
+                "The removed-address snapshot is invalid. No addresses were restored.",
+              );
+            }
+            const data = planWatchBatch([], [entry]).fresh[0]!;
+            // Undo restores public watches only; it cannot restore a deleted wallet or its keys.
+            const { walletId, ...publicData } = data;
+            return {
+              ...publicData,
+              id: entry.id,
+              addedAt: entry.addedAt,
+              ...(walletId && walletIds.has(walletId) ? { walletId } : {}),
+            };
+          });
+          for (const entry of normalized) {
+            const key = activityKey(entry.chain, entry.address);
+            if (knownIds.has(entry.id) || knownAddresses.has(key)) {
+              skipped += 1;
+              continue;
+            }
+            knownIds.add(entry.id);
+            knownAddresses.add(key);
+            restored.push(entry);
+          }
+          if (before.length + restored.length > 100)
+            throw new Error(
+              "Restoring these addresses would exceed the workspace limit of 100. No addresses were restored.",
+            );
+          if (restored.length) set({ watched: [...restored, ...before] });
+          return { restored: restored.length, skipped, error: null };
+        } catch (error) {
+          if (get().watched !== before) {
+            try {
+              set({ watched: before });
+            } catch {
+              /* The in-memory rollback precedes persistence. */
+            }
+            return {
+              restored: 0,
+              skipped: 0,
+              error: "Could not restore these addresses in browser storage.",
+            };
+          }
+          return {
+            restored: 0,
+            skipped: 0,
+            error: error instanceof Error ? error.message : "Could not restore these addresses.",
+          };
+        }
+      },
       addWallet: (wallet) => set({ wallets: [wallet, ...get().wallets] }),
       updateWallet: (id, patch) =>
         set({

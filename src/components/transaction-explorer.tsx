@@ -13,12 +13,12 @@ import {
 import { CHAINS, CHAIN_IDS, activityKey, chainLabel } from "@/lib/chains";
 import { formatTransactionDate, shortAddress } from "@/lib/format";
 import { downloadFile } from "@/lib/portfolio";
+import { useWorkspaceView } from "@/lib/view-preferences";
 import {
   filterTransactions,
   transactionsCsv,
   transactionTimeIso,
   type ExplorerTransaction,
-  type TransactionRange,
   type TransactionWatch,
 } from "@/lib/transactions";
 import "./transaction-explorer.css";
@@ -47,8 +47,7 @@ export function TransactionExplorer({
   const [localNetwork, setLocalNetwork] = useState("all");
   const [localDirection, setLocalDirection] = useState("all");
   const [address, setAddress] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [range, setRange] = useState<TransactionRange>("all");
+  const { status, range, setStatus, setRange } = useWorkspaceView();
   const [exportError, setExportError] = useState("");
   const filters = {
     search: search ?? localSearch,
@@ -205,7 +204,7 @@ export function TransactionExplorer({
           <select
             aria-label="Filter transactions by time"
             value={range}
-            onChange={(event) => setRange(event.target.value as TransactionRange)}
+            onChange={(event) => setRange(event.target.value)}
           >
             <option value="all">All fetched dates</option>
             <option value="24h">Last 24 hours</option>

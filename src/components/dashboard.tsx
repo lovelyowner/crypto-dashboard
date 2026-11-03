@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Bell,
   CheckCheck,
+  Undo2,
   ChevronDown,
   Copy,
   Eye,
@@ -40,6 +41,8 @@ import { useLedger, type WatchedAddress } from "@/lib/ledger-store";
 import { formatUsd, formatTransactionDate, relativeTime, shortAddress } from "@/lib/format";
 import { downloadFile, parseWatchlist, portfolioSummary } from "@/lib/portfolio";
 import { AddressEntry, EditAddressLabel } from "./address-entry";
+import { SyncHealth } from "./sync-health";
+import { useWorkspaceView } from "@/lib/view-preferences";
 import { TransactionExplorer } from "./transaction-explorer";
 import { WorkspaceSettings } from "./workspace-settings";
 import { useOnlineStatus, useWorkspacePreferences } from "@/lib/workspace-preferences";
@@ -68,20 +71,28 @@ const EXAMPLES = [
   },
 ];
 export function Dashboard() {
-  const { watched, wallets, hydrated, addWatchedBatch, removeWatched, togglePinned } = useLedger();
+  const {
+    watched,
+    wallets,
+    hydrated,
+    addWatchedBatch,
+    removeWatchedBatch,
+    restoreWatchedBatch,
+    togglePinned,
+  } = useLedger();
+  const view = useWorkspaceView();
+  const { tab, setTab, sort, setSort, network, setNetwork, direction, setDirection } = view;
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [removedRows, setRemovedRows] = useState<WatchedAddress[]>([]);
   const preferences = useWorkspacePreferences();
   const online = useOnlineStatus();
   const canSync = preferences.hydrated && online && !preferences.syncPaused;
-  const [sort, setSort] = useState("recent");
   const [editing, setEditing] = useState<WatchedAddress | null>(null);
   const [initialChain, setInitialChain] = useState<ChainId | undefined>();
   const [entryMode, setEntryMode] = useState<"single" | "file">("single");
   const { user } = useCurrentUserState();
-  const [tab, setTab] = useState<Tab>("Overview");
   const [modal, setModal] = useState<Modal>(null);
   const [search, setSearch] = useState("");
-  const [network, setNetwork] = useState("all");
-  const [direction, setDirection] = useState("all");
   const [toast, setToast] = useState("");
   const [menu, setMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -141,6 +152,72 @@ export function Dashboard() {
       }
       return b.addedAt - a.addedAt;
     });
+  const selectedRows = watched.filter((w) => selectedIds.has(w.id));
+  const selectedVisible = filtered.filter((w) => selectedIds.has(w.id));
+  const allVisibleSelected = filtered.length > 0 && selectedVisible.length === filtered.length;
+  function toggleSelection(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function selectVisible() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const row of filtered) {
+        if (allVisibleSelected) next.delete(row.id);
+        else next.add(row.id);
+      }
+      return next;
+    });
+  }
+  function removeRows(rows: WatchedAddress[]) {
+    if (!rows.length) return;
+    if (
+      !window.confirm(
+        rows.length === 1
+          ? "Remove this address from the watchlist? Wallet keys will not be deleted. You can undo this removal."
+          : `Remove ${rows.length} selected addresses, including selections outside the current filter? Wallet keys will not be deleted. You can undo this removal.`,
+      )
+    )
+      return;
+    const result = removeWatchedBatch(rows.map((row) => row.id));
+    if (result.error) {
+      setToast(result.error);
+      return;
+    }
+    if (!result.removed.length) {
+      setToast("Those addresses are no longer in the watchlist.");
+      return;
+    }
+    setRemovedRows(result.removed);
+    setSelectedIds(
+      (current) =>
+        new Set([...current].filter((id) => !result.removed.some((row) => row.id === id))),
+    );
+    setToast(
+      `Removed ${result.removed.length} ${result.removed.length === 1 ? "address" : "addresses"}. Undo is available in this tab.`,
+    );
+  }
+  function undoRemoval() {
+    const result = restoreWatchedBatch(removedRows);
+    if (result.error) {
+      setToast(result.error);
+      return;
+    }
+    setRemovedRows([]);
+    setToast(
+      `Restored ${result.restored} ${result.restored === 1 ? "address" : "addresses"}; skipped ${result.skipped} already present.`,
+    );
+  }
+  function refreshData() {
+    if (canSync && !query.isFetching) {
+      forceNext.current = true;
+      void query.refetch();
+    }
+  }
   const transactions = useMemo(() => {
     const list = results.flatMap((r) =>
       r.txs.map((tx, index) => ({
@@ -169,13 +246,13 @@ export function Dashboard() {
     setTab(value);
     setMenu(false);
   }
-  function exportWatches() {
+  function downloadWatches(rows: WatchedAddress[], filename = "fathom-watchlist.json") {
     downloadFile(
-      "fathom-watchlist.json",
+      filename,
       JSON.stringify(
         {
           version: 1,
-          addresses: watched.map(({ chain, address, label, pinned }) => ({
+          addresses: rows.map(({ chain, address, label, pinned }) => ({
             chain,
             address,
             label,
@@ -187,6 +264,12 @@ export function Dashboard() {
       ),
     );
     setToast("Public watchlist exported. No wallet keys included.");
+  }
+  function exportWatches() {
+    downloadWatches(watched);
+  }
+  function exportSelected() {
+    downloadWatches(selectedRows, "fathom-selected-watchlist.json");
   }
   async function importWatches(file?: File) {
     if (!file) return;
@@ -403,8 +486,41 @@ export function Dashboard() {
               {preferences.storageError}
             </div>
           )}
+          {view.storageError && !preferences.storageError && (
+            <div className="notice error" role="status">
+              {view.storageError}
+            </div>
+          )}
+          {removedRows.length > 0 && (
+            <div className="notice removal-undo" role="status">
+              <span>
+                {removedRows.length} {removedRows.length === 1 ? "address" : "addresses"} removed.
+                Undo restores the last removal only; it is available until this tab reloads.
+              </span>
+              <button className="button secondary small-button" onClick={undoRemoval}>
+                <Undo2 size={15} />
+                Undo removal
+              </button>
+              <button
+                className="icon-button"
+                aria-label="Dismiss undo removal"
+                onClick={() => setRemovedRows([])}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
           {(tab === "Overview" || tab === "Activity") && (
             <>
+              <SyncHealth
+                results={results}
+                total={watched.length}
+                fetching={query.isFetching}
+                updatedAt={query.dataUpdatedAt}
+                online={online}
+                paused={preferences.syncPaused}
+                onRetry={canSync ? refreshData : undefined}
+              />
               <div className="stat-grid">
                 <article className="stat balance-stat">
                   <div className="stat-label">
@@ -494,10 +610,7 @@ export function Dashboard() {
                     className={`icon-button ${query.isFetching ? "spinning" : ""}`}
                     aria-label="Refresh balances"
                     disabled={!canSync || !watched.length || query.isFetching}
-                    onClick={() => {
-                      forceNext.current = true;
-                      void query.refetch();
-                    }}
+                    onClick={refreshData}
                   >
                     <RefreshCw size={16} />
                   </button>
@@ -560,7 +673,66 @@ export function Dashboard() {
                     <option value="self">Other activity</option>
                   </select>
                 )}
+                {(search ||
+                  network !== "all" ||
+                  direction !== "all" ||
+                  sort !== "recent" ||
+                  view.status !== "all" ||
+                  view.range !== "all") && (
+                  <button
+                    className="button secondary reset-view"
+                    onClick={() => {
+                      view.resetView();
+                      setSearch("");
+                    }}
+                  >
+                    Reset view
+                  </button>
+                )}
               </div>
+              {tab === "Overview" && watched.length > 0 && (
+                <div className="address-selection-bar">
+                  <label className="select-visible">
+                    <input
+                      type="checkbox"
+                      aria-label="Select visible addresses"
+                      checked={allVisibleSelected}
+                      ref={(input) => {
+                        if (input)
+                          input.indeterminate = selectedVisible.length > 0 && !allVisibleSelected;
+                      }}
+                      disabled={!filtered.length}
+                      onChange={selectVisible}
+                    />
+                    <span>{selectedRows.length} selected across all filters</span>
+                  </label>
+                  <div>
+                    <button
+                      className="text-button"
+                      disabled={!selectedRows.length}
+                      onClick={() => setSelectedIds(new Set())}
+                    >
+                      Clear selection
+                    </button>
+                    <button
+                      className="button secondary small-button"
+                      disabled={!selectedRows.length}
+                      onClick={exportSelected}
+                    >
+                      <ArrowDownToLine size={14} />
+                      Export selected
+                    </button>
+                    <button
+                      className="button secondary small-button"
+                      disabled={!selectedRows.length}
+                      onClick={() => removeRows(selectedRows)}
+                    >
+                      <Trash2 size={14} />
+                      Remove selected
+                    </button>
+                  </div>
+                </div>
+              )}
               {query.isError && (
                 <div className="notice error" role="alert">
                   Could not update this workspace. {query.error.message}{" "}
@@ -627,6 +799,13 @@ export function Dashboard() {
                             key={w.id}
                           >
                             <div className="address-card-top">
+                              <input
+                                className="select-address"
+                                type="checkbox"
+                                aria-label={`Select ${w.label || w.address}`}
+                                checked={selectedIds.has(w.id)}
+                                onChange={() => toggleSelection(w.id)}
+                              />
                               <ChainIcon chain={w.chain} />
                               <div className="address-identity">
                                 <h3>{w.label || CHAINS[w.chain].name + " address"}</h3>
@@ -661,14 +840,7 @@ export function Dashboard() {
                                 <button
                                   className="icon-button remove-address"
                                   aria-label={`Remove ${w.label || w.address}`}
-                                  onClick={() => {
-                                    if (
-                                      window.confirm(
-                                        "Remove this address from the watchlist? Wallet keys will not be deleted.",
-                                      )
-                                    )
-                                      removeWatched(w.id);
-                                  }}
+                                  onClick={() => removeRows([w])}
                                 >
                                   <Trash2 size={15} />
                                 </button>
