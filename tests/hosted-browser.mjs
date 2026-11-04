@@ -32,9 +32,10 @@ async function serveHostedBuild() {
       }
       // Mirrors the repository's explicit SPA entry and login rewrites. Do not
       // turn missing JS/assets or API failures into successful index responses.
-      const pathname = ["/", "/login", "/login/"].includes(url.pathname)
-        ? "/index.html"
-        : decodeURIComponent(url.pathname);
+      const pathname =
+        ["/", "/login", "/login/"].includes(url.pathname) || /^\/u\/[^/]+\/?$/.test(url.pathname)
+          ? "/index.html"
+          : decodeURIComponent(url.pathname);
       const path = resolve(directory, `.${pathname}`);
       if (!path.startsWith(`${directory}${sep}`)) {
         response.writeHead(404).end();
@@ -125,6 +126,12 @@ async function runChecks() {
     config.rewrites?.some((rule) => rule.source === "/login" && rule.destination === "/index.html"),
     "Vercel must serve the SPA on account callback/recovery route /login",
   );
+  assert.ok(
+    config.rewrites?.some(
+      (rule) => rule.source === "/u/:handle" && rule.destination === "/index.html",
+    ),
+    "Vercel must serve the public creator page entry on /u/:handle",
+  );
   const { child, baseURL } = await startHostedServer();
   let browser;
   let checks = 0;
@@ -151,7 +158,12 @@ async function runChecks() {
     await check(
       "unconfigured hosted accounts and private drafts fail closed with uncached 503",
       async () => {
-        for (const pathname of ["/api/auth/get-session", "/api/profile"]) {
+        for (const pathname of [
+          "/api/auth/get-session",
+          "/api/profile",
+          "/api/profile/publication",
+          "/api/public-profiles/hosted-creator",
+        ]) {
           const response = await fetch(`${baseURL}${pathname}`);
           assert.equal(response.status, 503, pathname);
           assert.match(response.headers.get("cache-control"), /no-store/);
@@ -243,6 +255,48 @@ async function runChecks() {
         true,
       );
     });
+    await check(
+      "hosted public routes distinguish unavailable publishing without loading accounts or drafts",
+      async () => {
+        const publicPage = await context.newPage();
+        const requests = [];
+        publicPage.on("pageerror", (error) => errors.push(error.message));
+        publicPage.on("request", (request) => {
+          const path = new URL(request.url()).pathname;
+          if (path.startsWith("/api/")) requests.push(path);
+        });
+        const localDraft = await page.evaluate(() =>
+          localStorage.getItem("fathom.creator-profile.v1"),
+        );
+        for (const suffix of ["", "/"]) {
+          const [profileResponse] = await Promise.all([
+            publicPage.waitForResponse(
+              (response) =>
+                new URL(response.url()).pathname === "/api/public-profiles/hosted-creator",
+            ),
+            publicPage.goto(`${baseURL}/u/hosted-creator${suffix}`, {
+              waitUntil: "domcontentloaded",
+            }),
+          ]);
+          assert.equal(profileResponse.status(), 503);
+          await publicPage
+            .getByRole("heading", { name: "Could not load this profile", exact: true })
+            .waitFor();
+          assert.equal(await publicPage.locator(".sidebar").count(), 0);
+          assert.equal(
+            await publicPage.getByRole("button", { name: "Try again", exact: true }).count(),
+            1,
+          );
+          assert.equal(
+            await publicPage.evaluate(() => localStorage.getItem("fathom.creator-profile.v1")),
+            localDraft,
+          );
+        }
+        assert.ok(requests.length > 0);
+        assert.ok(requests.every((path) => path === "/api/public-profiles/hosted-creator"));
+        await publicPage.close();
+      },
+    );
     await check("hosted setup-required state has no browser runtime errors", async () =>
       assert.deepEqual(errors, []),
     );

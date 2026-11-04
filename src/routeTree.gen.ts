@@ -12,7 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiProfileRouteImport } from './routes/api/profile'
+import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiProfilePublicationRouteImport } from './routes/api/profile.publication'
+import { Route as ApiPublicProfilesHandleRouteImport } from './routes/api/public-profiles/$handle'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -29,44 +32,92 @@ const ApiProfileRoute = ApiProfileRouteImport.update({
   path: '/api/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UHandleRoute = UHandleRouteImport.update({
+  id: '/u/$handle',
+  path: '/u/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiProfilePublicationRoute = ApiProfilePublicationRouteImport.update({
+  id: '/publication',
+  path: '/publication',
+  getParentRoute: () => ApiProfileRoute,
+} as any)
+const ApiPublicProfilesHandleRoute = ApiPublicProfilesHandleRouteImport.update({
+  id: '/api/public-profiles/$handle',
+  path: '/api/public-profiles/$handle',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/api/profile': typeof ApiProfileRoute
+  '/api/profile': typeof ApiProfileRouteWithChildren
+  '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/profile/publication': typeof ApiProfilePublicationRoute
+  '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/api/profile': typeof ApiProfileRoute
+  '/api/profile': typeof ApiProfileRouteWithChildren
+  '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/profile/publication': typeof ApiProfilePublicationRoute
+  '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/api/profile': typeof ApiProfileRoute
+  '/api/profile': typeof ApiProfileRouteWithChildren
+  '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/profile/publication': typeof ApiProfilePublicationRoute
+  '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/api/profile' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/api/profile'
+    | '/u/$handle'
+    | '/api/auth/$'
+    | '/api/profile/publication'
+    | '/api/public-profiles/$handle'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/api/profile' | '/api/auth/$'
-  id: '__root__' | '/' | '/login' | '/api/profile' | '/api/auth/$'
+  to:
+    | '/'
+    | '/login'
+    | '/api/profile'
+    | '/u/$handle'
+    | '/api/auth/$'
+    | '/api/profile/publication'
+    | '/api/public-profiles/$handle'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/api/profile'
+    | '/u/$handle'
+    | '/api/auth/$'
+    | '/api/profile/publication'
+    | '/api/public-profiles/$handle'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
-  ApiProfileRoute: typeof ApiProfileRoute
+  ApiProfileRoute: typeof ApiProfileRouteWithChildren
+  UHandleRoute: typeof UHandleRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiPublicProfilesHandleRoute: typeof ApiPublicProfilesHandleRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,6 +143,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/u/$handle': {
+      id: '/u/$handle'
+      path: '/u/$handle'
+      fullPath: '/u/$handle'
+      preLoaderRoute: typeof UHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -99,14 +157,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/profile/publication': {
+      id: '/api/profile/publication'
+      path: '/publication'
+      fullPath: '/api/profile/publication'
+      preLoaderRoute: typeof ApiProfilePublicationRouteImport
+      parentRoute: typeof ApiProfileRoute
+    }
+    '/api/public-profiles/$handle': {
+      id: '/api/public-profiles/$handle'
+      path: '/api/public-profiles/$handle'
+      fullPath: '/api/public-profiles/$handle'
+      preLoaderRoute: typeof ApiPublicProfilesHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface ApiProfileRouteChildren {
+  ApiProfilePublicationRoute: typeof ApiProfilePublicationRoute
+}
+
+const ApiProfileRouteChildren: ApiProfileRouteChildren = {
+  ApiProfilePublicationRoute: ApiProfilePublicationRoute,
+}
+
+const ApiProfileRouteWithChildren = ApiProfileRoute._addFileChildren(
+  ApiProfileRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
-  ApiProfileRoute: ApiProfileRoute,
+  ApiProfileRoute: ApiProfileRouteWithChildren,
+  UHandleRoute: UHandleRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiPublicProfilesHandleRoute: ApiPublicProfilesHandleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

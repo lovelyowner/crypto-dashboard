@@ -19,7 +19,7 @@ The normal `npm run build` / `npm start` workflow below remains available for th
 
 ## Deploy this repository to Vercel
 
-Import `lovelyowner/crypto-dashboard` in Vercel and select `main` with the repository root as Root Directory. The checked-in `vercel.json` selects **Other**, installs with `npm ci`, builds with `npm run build:vercel`, and publishes `site/`. Node.js 24 is declared in `package.json`. The hosted build includes same-origin Node functions under `/api/*` for accounts and private profile drafts. Public watchlists, local wallets, creator links, wishlists, donation links, and public profile snapshots work without account credentials.
+Import `lovelyowner/crypto-dashboard` in Vercel and select `main` with the repository root as Root Directory. The checked-in `vercel.json` selects **Other**, installs with `npm ci`, builds with `npm run build:vercel`, and publishes `site/`. Node.js 24 is declared in `package.json`. The hosted build includes same-origin Node functions under `/api/*` for accounts, private profile drafts, and published creator pages. Public watchlists, local wallets, creator links, wishlists, donation links, and public profile snapshots work without account credentials.
 
 For accounts, add these server-only variables in **Vercel → Project → Settings → Environment Variables**, then redeploy:
 
@@ -52,6 +52,8 @@ npm run lint
 npm test
 npm run test:auth     # running development server required; creates disposable test accounts
 npm run test:profile  # checks private account draft ownership over real HTTP
+npm run test:publication # verifies explicit publishing and handle ownership
+npm run test:sessions # verifies actual session revocation and account isolation
 npm run test:e2e      # running server + Playwright Chromium; includes disposable account UI checks
 npm run build:vercel
 npm run test:hosted   # isolated production smoke; uses the built site and actual API entry
@@ -82,7 +84,13 @@ Support options include a hosted bank/payment checkout link and up to 10 validat
 
 **Save local draft** explicitly saves to this browser. **Export profile** creates a public-data-only backup; import validates every field before replacing the editor. Switching dashboard tabs preserves unsaved edits. **Save to account** / **Load from account** explicitly write/read a private draft under the signed-in account; they never publish it.
 
-**Share public profile** creates a snapshot URL containing the public profile in the `#profile=` fragment. Anyone with that URL can read its contents, including donation addresses. Opening a snapshot presents a read-only profile and does not change the visitor's local draft; **Use as local draft** is an explicit action. Editing a draft does not change previously shared links. This release does not create a permanent username page or social feed. Large profiles can create long URLs; export JSON when a messaging service rejects the link. Only public HTTPS links are accepted; listed profiles and crypto addresses are self-reported, with no ownership badge.
+**Share public profile** creates a snapshot URL containing the public profile in the `#profile=` fragment. Anyone with that URL can read its contents, including donation addresses. Opening a snapshot presents a read-only profile and does not change the visitor's local draft; **Use as local draft** is an explicit action. Editing a draft does not change previously shared links. A snapshot is independent of the hosted page described below. Large profiles can create long URLs; export JSON when a messaging service rejects the link. Only public HTTPS links are accepted; listed profiles and crypto addresses are self-reported, with no ownership badge.
+
+For a stable address, sign in and open **Public page** in the profile editor. Choose a 3–32 character public handle using letters, digits, underscores, or hyphens, starting and ending with a letter or digit. Public handles are lowercase and separate from Unicode sign-in names. A handle belongs to one account and cannot be renamed in this release; unpublishing keeps it reserved.
+
+**Publish public page** explicitly sends the current valid editor snapshot to `/u/your-handle`. Updating or privately saving a draft leaves the published page unchanged until **Publish update** is chosen. **Unpublish page** makes new anonymous profile API requests return 404 and shows visitors an unavailable page, while retaining your handle and private snapshot for republishing. Saved copies and older `#profile=` links remain readable. Visitors see only the public profile fields; no account email, linked provider data, sessions, watchlist, or keys are returned. Visitor pages do not load the watchlist, query blockchain providers, or alter the visitor's browser drafts.
+
+Stable pages require the hosted account/database configuration and migration `0006_public_profiles.sql`, which the Vercel build applies automatically when `DATABASE_URL` is set. Standalone files and guest mode retain local editing and snapshot sharing. A social feed and Bluesky sign-in are not implemented.
 
 ## TXT address import and dates
 
@@ -113,7 +121,7 @@ The production build is a Node server, not a static-only Firebase Hosting bundle
 1. Provision PostgreSQL and configure `DATABASE_URL`, a stable random `BETTER_AUTH_SECRET` of at least 32 characters, and an exact HTTPS `BETTER_AUTH_URL`.
 2. Configure email delivery and desired OAuth providers as described in [authentication](docs/authentication.md). No secrets belong in `VITE_*` variables or source code.
 3. Apply schema with `npm run db:migrate`, build with `npm run build`, then run `npm start` behind HTTPS.
-4. Before public multi-instance deployment, add shared rate limiting, database backups/monitoring, and validate the actual provider callbacks, verification, recovery-email delivery, and browser CORS. These external flows were not exercised here.
+4. Use trusted proxy IP headers for the shared database rate limiter, configure database backups/monitoring, and validate provider callbacks, verification, recovery-email delivery, and browser CORS on the deployment.
 
 Production authentication returns 503 until required settings exist; public watch-only and local wallet features still render. Merely building does not publish a site or configure an OAuth provider.
 

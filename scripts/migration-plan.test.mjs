@@ -69,6 +69,7 @@ test("account, rate-limit and profile migrations ship in order without descendin
       "0003_account_security.sql",
       "0004_auth_rate_limit.sql",
       "0005_creator_profiles.sql",
+      "0006_public_profiles.sql",
     ],
   );
   assert.equal(

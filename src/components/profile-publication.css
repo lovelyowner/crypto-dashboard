@@ -1,0 +1,195 @@
+.profile-publication {
+  min-width: 0;
+  margin: 0 0 28px;
+  padding: 21px;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+}
+.profile-publication-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+.profile-publication-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--ui-text-3);
+}
+.profile-publication-heading h2 svg,
+.profile-publication button svg,
+.profile-publication-link-actions svg,
+.profile-publication-feedback svg {
+  flex-shrink: 0;
+  color: var(--ui-icon);
+}
+.profile-publication-heading p,
+.profile-publication-hint {
+  margin: 8px 0 13px;
+  font-size: 11px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.profile-publication-state {
+  color: var(--ui-text-1);
+  font-size: 10px;
+  line-height: 1.7;
+  text-align: right;
+}
+.profile-publication-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  margin-bottom: 18px;
+}
+.profile-publication-handle,
+.profile-publication-link {
+  min-width: 0;
+}
+.profile-publication-fields label {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 11px;
+}
+.profile-publication-handle-input {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-background);
+}
+.profile-publication-handle-input:focus-within {
+  outline: 1px solid var(--ui-border);
+  outline-offset: 2px;
+}
+.profile-publication-handle-input > span {
+  padding: 10px 0 10px 12px;
+  font-size: 12px;
+  color: var(--ui-text-1);
+}
+.profile-publication-handle-input > input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px 10px 3px;
+  border: 0;
+  background: var(--ui-background);
+  color: var(--ui-text-3);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.profile-publication-handle-input > input:focus {
+  outline: none;
+}
+.profile-publication-handle small {
+  display: block;
+  margin-top: 8px;
+  color: var(--ui-text-2);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.profile-publication-link > input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--ui-background);
+  color: var(--ui-text-3);
+  font-size: 12px;
+}
+.profile-publication-link-actions,
+.profile-publication-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.profile-publication-link-actions {
+  margin-top: 9px;
+}
+.profile-publication-link-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text-3);
+  background: var(--ui-background);
+  font-size: 11px;
+  text-decoration: none;
+}
+.profile-publication-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 17px 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--ui-text-2);
+}
+.profile-publication-consent > input {
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  accent-color: var(--ui-text-2);
+}
+.profile-publication-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text-3);
+  font-size: 11px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.profile-publication-feedback svg {
+  margin-top: 3px;
+}
+.profile-publication-spin {
+  animation: publication-spin 1s linear infinite;
+}
+@keyframes publication-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 760px) {
+  .profile-publication {
+    padding: 18px 16px;
+  }
+  .profile-publication-heading {
+    gap: 12px;
+  }
+  .profile-publication-state {
+    max-width: 115px;
+  }
+  .profile-publication-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .profile-publication-actions > button {
+    flex-grow: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-publication-spin {
+    animation: none;
+  }
+}

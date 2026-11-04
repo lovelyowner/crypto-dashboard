@@ -1,0 +1,101 @@
+.account-sessions {
+  min-width: 0;
+}
+.account-sessions .account-section-heading {
+  flex-wrap: wrap;
+}
+.account-sessions-refresh {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  margin-left: auto;
+  font-size: 10px;
+}
+.account-sessions-refresh svg,
+.account-sessions .account-success svg,
+.account-recovery-readiness svg {
+  color: var(--ui-icon);
+  flex-shrink: 0;
+}
+.account-session-list {
+  list-style: none;
+  margin: 0 0 15px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.account-session-card {
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  padding: 13px;
+  min-width: 0;
+  background: var(--ui-background);
+}
+.account-session-card-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 9px;
+}
+.account-session-card-heading strong {
+  font-size: 12px;
+  color: var(--ui-text-3);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.account-session-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0 0;
+  font-size: 10px;
+  color: var(--ui-text-2);
+}
+.account-session-card dl > div {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.account-session-card dd {
+  margin: 0;
+}
+.account-session-card dt {
+  color: var(--ui-text-1);
+}
+.account-session-card details {
+  margin-top: 12px;
+  font-size: 10px;
+  color: var(--ui-text-1);
+}
+.account-session-card summary {
+  cursor: pointer;
+}
+.account-session-card details p {
+  color: var(--ui-text-2);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  margin: 8px 0 0;
+}
+.account-recovery-readiness {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-background);
+  border-radius: 9px;
+  padding: 13px;
+  margin: 18px 0;
+}
+.account-recovery-readiness h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ui-text-3);
+  font-size: 12px;
+  margin: 0 0 9px;
+}
+.account-recovery-readiness p {
+  color: var(--ui-text-2);
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 8px 0 0;
+}

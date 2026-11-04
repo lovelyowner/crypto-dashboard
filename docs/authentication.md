@@ -27,6 +27,17 @@ The test creates a disposable account and exercises real HTTP endpoints, cookies
 
 `npm test` also exercises session policies against Better Auth's real HTTP handler using an isolated memory database. It checks actual expiration, remembered and browser-session cookies, invalid choices, two-factor continuation, forged continuation cookies, and backup-code recovery. Login requests use the bounded `x-fathom-session-duration` header (`1h`, `1d`, or `7d`). A signed HttpOnly cookie lasts up to ten minutes while OAuth or 2FA completes, then is removed. Missing or invalid continuation policy cookies fall back to the shortest lifetime. Cookie lifetime and database lifetime agree; server expiry is authoritative.
 
+## Signed-in sessions and independent access
+
+**Account & security → Signed-in sessions** lists actual active sessions with browser-reported device details, sign-in and expiry dates in `dd.mm.yy HH:mm UTC`, and a current-session marker. Device descriptions are self-reported. Session tokens are never shown or exported by the UI. Sign out one other session or all other sessions while keeping this browser signed in; the server checks session ownership. Revocation removes account access, while local watchlists and encrypted wallet backups remain on the other device.
+
+The session-management API requires a recent login. If the panel asks for fresh authentication, sign out and sign back in before retrying. An independent-access summary uses the account's actual linked sign-in methods, verified-email state, email-delivery availability, and authenticator status. It cannot check whether recovery codes were saved. Social-only accounts should add an independent password and save authenticator recovery codes before they lose access to a provider.
+
+```sh
+npm run test:sessions
+CHROMIUM_PATH=/path/to/chromium node tests/session-browser.mjs
+```
+
 ## Production configuration
 
 Set these on the server:

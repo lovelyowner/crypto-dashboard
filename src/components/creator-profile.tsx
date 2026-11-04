@@ -64,6 +64,7 @@ export interface CreatorProfileProps {
   accountStatus?: string;
   onSaveAccount?: (profile: CreatorProfileData) => Promise<void>;
   onLoadAccount?: () => Promise<CreatorProfileData | null>;
+  renderPublication?: (profile: CreatorProfileData | null) => ReactNode;
 }
 
 function freshProfile(): CreatorProfileData {
@@ -161,14 +162,16 @@ function RowActions({
   );
 }
 
-function PublicProfile({
+export function PublicProfile({
   profile,
   onCopy,
   shared = false,
+  published = false,
 }: {
   profile: CreatorProfileData;
   onCopy: (value: string, label: string) => void;
   shared?: boolean;
+  published?: boolean;
 }) {
   const hasDonations = Boolean(
     profile.donations.bankLink ||
@@ -178,12 +181,20 @@ function PublicProfile({
   return (
     <article
       className="creator-public-card"
-      aria-label={shared ? "Shared creator profile" : "Public profile preview"}
+      aria-label={
+        published
+          ? "Published creator profile"
+          : shared
+            ? "Shared creator profile"
+            : "Public profile preview"
+      }
     >
       <div className="creator-avatar">
         <UserRound size={27} aria-hidden="true" />
       </div>
-      <span className="creator-eyebrow">{shared ? "SHARED PROFILE" : "PUBLIC PREVIEW"}</span>
+      <span className="creator-eyebrow">
+        {published ? "CREATOR PROFILE" : shared ? "SHARED PROFILE" : "PUBLIC PREVIEW"}
+      </span>
       <h2>{profile.displayName || "Your creator profile"}</h2>
       {profile.bio && <p className="creator-public-bio">{profile.bio}</p>}
       <p className="creator-self-reported">
@@ -289,6 +300,7 @@ export function CreatorProfile({
   accountStatus,
   onSaveAccount,
   onLoadAccount,
+  renderPublication,
 }: CreatorProfileProps) {
   const [draft, setDraft] = useState<CreatorProfileData>(freshProfile);
   const [shared, setShared] = useState<CreatorProfileData | null>(null);
@@ -635,6 +647,7 @@ export function CreatorProfile({
               </button>
             </div>
           </div>
+          {renderPublication?.(validatedPreview)}
           <div className="creator-workspace">
             <div className="creator-editor">
               <section className="creator-edit-section">

@@ -1,4 +1,5 @@
 import { CreatorProfile } from "./creator-profile";
+import { ProfilePublication } from "./profile-publication";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { validateCreatorProfile, type CreatorProfileData } from "@/lib/creator-profile";
 
@@ -35,6 +36,13 @@ export function AccountCreatorProfile({ onOpenAccount }: { onOpenAccount: () => 
         </div>
       )}
       <CreatorProfile
+        renderPublication={(profile) => (
+          <ProfilePublication
+            profile={profile}
+            accountAvailable={Boolean(user)}
+            accountKey={user?.id ?? null}
+          />
+        )}
         accountAvailable={Boolean(user)}
         accountStatus={
           isPending

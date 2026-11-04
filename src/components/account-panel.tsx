@@ -18,6 +18,7 @@ import {
   SESSION_DURATION_OPTIONS,
   type SessionDuration,
 } from "@/lib/auth/policy";
+import { AccountRecoveryReadiness, AccountSessions } from "./account-sessions";
 import "./account.css";
 
 type Configuration = {
@@ -730,6 +731,12 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             <Link2 size={17} />
             <h3>Independent sign-in methods</h3>
           </div>
+          <AccountRecoveryReadiness
+            providerIds={accounts.map((account) => account.providerId)}
+            emailVerified={user.emailVerified}
+            emailRecoveryConfigured={configuration?.emailRecovery ?? null}
+            twoFactorEnabled={twoFactorEnabled}
+          />
           <p className="account-help">
             Connect another provider and keep an email/password login. A suspended Discord account
             won’t then be your only route back. Linking requires proving ownership through that
@@ -818,6 +825,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               unavailable. Existing passwords and 2FA backup codes work independently.
             </p>
           )}
+          <AccountSessions key={session.session.id} currentSessionId={session.session.id} />
         </>
       )}
       <p className="account-footnote">
