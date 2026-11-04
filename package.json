@@ -11,12 +11,16 @@
     "build": "vite build",
     "start": "NODE_ENV=production node .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-isolation=none src/lib/*.test.ts src/lib/wallet/*.test.ts src/lib/auth/*.test.ts",
+    "test": "node --import tsx --test --test-isolation=none src/lib/*.test.ts src/lib/wallet/*.test.ts src/lib/auth/*.test.ts scripts/migration-plan.test.mjs",
     "lint": "eslint src vite.config.ts",
-    "test:e2e": "node tests/browser.mjs && node tests/workspace-browser.mjs && node tests/txt-import-browser.mjs && node tests/actions-browser.mjs",
+    "test:e2e": "node tests/browser.mjs && node tests/workspace-browser.mjs && node tests/txt-import-browser.mjs && node tests/actions-browser.mjs && node tests/profile-browser.mjs && npm run test:account",
     "db:migrate": "node scripts/migrate.mjs",
     "test:auth": "node scripts/auth-integration.mjs",
-    "build:site": "vite build --config vite.static.config.ts && node scripts/package-site.mjs"
+    "build:site": "vite build --config vite.static.config.ts && node scripts/package-site.mjs",
+    "build:vercel": "vite build --config vite.static.config.ts --mode hosted && npm run db:migrate",
+    "test:profile": "node scripts/profile-integration.mjs",
+    "test:hosted": "node --import tsx tests/hosted-browser.mjs",
+    "test:account": "node tests/account-browser.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

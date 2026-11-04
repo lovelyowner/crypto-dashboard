@@ -3,14 +3,14 @@ import { AccountPanel } from "@/components/account-panel";
 export const Route = createFileRoute("/login")({ component: Login });
 function Login() {
   return (
-    <main style={{ minHeight: "100dvh", padding: "40px 24px", background: "#0b111b" }}>
+    <main style={{ minHeight: "100dvh", padding: "40px 24px", background: "#fff" }}>
       <div
         style={{
           maxWidth: 520,
           margin: "auto",
           padding: 24,
-          background: "#121c2a",
-          border: "1px solid #28374c",
+          background: "#fff",
+          border: "1px solid #ccc",
           borderRadius: 20,
         }}
       >

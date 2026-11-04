@@ -19,12 +19,13 @@ function check(condition, message) {
 function client() {
   const cookies = new Map();
   let recentCookies = [];
-  async function request(path, body) {
+  async function request(path, body, duration) {
     const response = await fetch(`${origin}/api/auth${path}`, {
       method: body === undefined ? "GET" : "POST",
       headers: {
         origin,
         ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...(duration ? { "x-fathom-session-duration": duration } : {}),
         ...(cookies.size
           ? { cookie: Array.from(cookies, ([k, v]) => `${k}=${v}`).join("; ") }
           : {}),
@@ -121,7 +122,13 @@ check(!unlink.ok, "The only remaining sign-in method cannot be removed");
 await user.request("/sign-out", {});
 const wrong = await user.request("/sign-in/username", { username, password: `${password}wrong` });
 check(!wrong.ok, "Wrong password is rejected");
-const signin = await user.request("/sign-in/username", { username, password, rememberMe: false });
+const invalidDuration = await user.request("/sign-in/username", { username, password }, "365d");
+check(invalidDuration.status === 400, "Unsupported session duration is rejected");
+const signin = await user.request(
+  "/sign-in/username",
+  { username, password, rememberMe: false },
+  "1h",
+);
 check(
   signin.ok && !signin.data?.twoFactorRedirect,
   "Unicode username and arbitrary-symbol password can sign in",
@@ -131,6 +138,12 @@ check(
   Boolean(sessionCookie) && !/;\s*(?:max-age|expires)=/i.test(sessionCookie),
   "rememberMe=false produces a browser-session login cookie",
 );
+const shortSession = await user.request("/get-session");
+const shortRemaining = new Date(shortSession.data?.session?.expiresAt).getTime() - Date.now();
+check(
+  shortRemaining > 3_590_000 && shortRemaining <= 3_600_000,
+  "One-hour choice changes actual server session expiry",
+);
 
 const enable = await user.request("/two-factor/enable", { password, issuer: "Fathom" });
 check(
@@ -138,8 +151,10 @@ check(
   "TOTP enrollment produces an authenticator URI",
 );
 check(
-  Array.isArray(enable.data?.backupCodes) && enable.data.backupCodes.length > 0,
-  "Enrollment supplies recovery codes",
+  Array.isArray(enable.data?.backupCodes) &&
+    enable.data.backupCodes.length === 10 &&
+    enable.data.backupCodes.every((code) => code.replaceAll("-", "").length === 16),
+  "Enrollment supplies ten 16-character recovery codes",
 );
 const backupCode = enable.data.backupCodes[0];
 const secret = new URL(enable.data.totpURI).searchParams.get("secret");
@@ -156,11 +171,15 @@ check(verify.ok, "A real RFC6238 authenticator code activates 2FA");
 const enabled = await user.request("/get-session");
 check(enabled.data?.user?.twoFactorEnabled === true, "Server records verified 2FA enrollment");
 await user.request("/sign-out", {});
-const challenge = await user.request("/sign-in/username", {
-  username,
-  password,
-  rememberMe: false,
-});
+const challenge = await user.request(
+  "/sign-in/username",
+  {
+    username,
+    password,
+    rememberMe: false,
+  },
+  "1h",
+);
 check(
   challenge.ok && challenge.data?.twoFactorRedirect === true,
   "Password login is challenged when 2FA is enabled",
@@ -169,23 +188,38 @@ const pending = await user.request("/get-session");
 check(!pending.data?.user, "A password alone does not establish a 2FA session");
 const badCode = await user.request("/two-factor/verify-totp", { code: "invalid" });
 check(!badCode.ok, "Invalid authenticator code is rejected at login");
-const challenged = await user.request("/two-factor/verify-totp", {
-  code: totp(secret),
-  trustDevice: false,
-});
+const challenged = await user.request(
+  "/two-factor/verify-totp",
+  {
+    code: totp(secret),
+    trustDevice: false,
+  },
+  "7d",
+);
 check(challenged.ok, "Correct authenticator code completes challenged login");
 const signedIn = await user.request("/get-session");
 check(
   signedIn.data?.user?.username === username,
   "2FA completion grants the expected account session",
 );
+const challengedRemaining = new Date(signedIn.data?.session?.expiresAt).getTime() - Date.now();
+check(
+  challengedRemaining > 3_590_000 && challengedRemaining <= 3_600_000,
+  "2FA completion preserves the signed one-hour deadline despite a different header",
+);
 await user.request("/sign-out", {});
-await user.request("/sign-in/username", { username, password, rememberMe: false });
+await user.request("/sign-in/username", { username, password, rememberMe: false }, "7d");
 const recover = await user.request("/two-factor/verify-backup-code", {
   code: backupCode,
   trustDevice: false,
 });
 check(recover.ok, "A saved backup code can recover the 2FA login");
+const recoverySession = await user.request("/get-session");
+const recoveryRemaining = new Date(recoverySession.data?.session?.expiresAt).getTime() - Date.now();
+check(
+  recoveryRemaining > 604_790_000 && recoveryRemaining <= 604_800_000,
+  "Recovery-code login preserves the selected seven-day server lifetime",
+);
 await user.request("/sign-out", {});
 await user.request("/sign-in/username", { username, password, rememberMe: false });
 const replay = await user.request("/two-factor/verify-backup-code", {
@@ -196,5 +230,5 @@ check(!replay.ok, "A consumed backup code cannot be reused");
 const noReplaySession = await user.request("/get-session");
 check(!noReplaySession.data?.user, "Rejected recovery-code replay does not create a session");
 console.log(
-  `Auth integration: ${checks} checks passed (Unicode login, cookie lifetime, verified TOTP, single-use recovery, access controls).`,
+  `Auth integration: ${checks} checks passed (Unicode login, server-enforced duration, verified TOTP, single-use recovery, access controls).`,
 );

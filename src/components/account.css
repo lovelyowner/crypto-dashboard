@@ -52,6 +52,7 @@
   color: var(--ui-text-2);
 }
 .account-form input:not([type="checkbox"]),
+.account-form select,
 .account-label input {
   background: var(--ui-background);
   border: 1px solid var(--ui-border);
@@ -64,6 +65,7 @@
   outline: none;
 }
 .account-form input:focus,
+.account-form select:focus,
 .account-label input:focus {
   border-color: var(--ui-border);
   outline: 2px solid var(--ui-border);
@@ -245,6 +247,10 @@
 .account-identity small {
   font-size: 11px;
   color: var(--ui-text-1);
+}
+.account-session-expiry {
+  font-size: 11px !important;
+  color: var(--ui-text-1) !important;
 }
 .account-section-heading {
   display: flex;

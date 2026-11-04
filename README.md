@@ -11,7 +11,7 @@ Run `npm run build:site` to create:
 
 For a public browser link without command-line deployment, unzip `fathom-website.zip`, open [Netlify Drop](https://app.netlify.com/drop), and upload the extracted website folder containing `index.html`. Netlify supplies the HTTPS URL. A hosting account may be required. No hosting deployment was performed from this workspace.
 
-The browser edition supports public-address tracking, local encrypted wallets, and watchlist/backup imports and exports. Email/social login and account 2FA are not enabled because there is no account server. Wallet backup protection works independently. Public data still needs Internet access and is subject to provider CORS and rate limits.
+The browser edition supports public-address tracking, local encrypted wallets, and watchlist/backup imports and exports. This standalone/static edition has no account server, so email/social login and account 2FA are unavailable. The Vercel hosted build below includes the account API. Wallet backup protection works independently. Public data still needs Internet access and is subject to provider CORS and rate limits.
 
 Saved data is specific to a browser and site address. Export your watchlist and encrypted wallet backup before switching from a local file to a hosted URL; export files do not transfer automatically. Keep recovery words offline.
 
@@ -19,11 +19,21 @@ The normal `npm run build` / `npm start` workflow below remains available for th
 
 ## Deploy this repository to Vercel
 
-Import `lovelyowner/crypto-dashboard` in Vercel and select the `main` branch with the repository root as the Root Directory. The checked-in `vercel.json` selects **Other** (no framework preset), installs with `npm ci`, builds with `npm run build:site`, and publishes `site/`. Node.js 24 is declared in `package.json`. No environment variables are needed for this browser-only deployment. Do not override the build command with `npm run build`; that command builds the separate Node-server edition.
+Import `lovelyowner/crypto-dashboard` in Vercel and select `main` with the repository root as Root Directory. The checked-in `vercel.json` selects **Other**, installs with `npm ci`, builds with `npm run build:vercel`, and publishes `site/`. Node.js 24 is declared in `package.json`. The hosted build includes same-origin Node functions under `/api/*` for accounts and private profile drafts. Public watchlists, local wallets, creator links, wishlists, donation links, and public profile snapshots work without account credentials.
 
-After connecting the repository, pushes to `main` can trigger Vercel production deployments. Vercel provides the actual deployment URL; a configuration file or Git push alone does not establish a live deployment.
+For accounts, add these server-only variables in **Vercel → Project → Settings → Environment Variables**, then redeploy:
 
-The Vercel browser edition supports watchlists, public address activity, encrypted local wallets, and backup import/export. Email/social login and account 2FA require deploying/configuring the separate account backend, persistent PostgreSQL, mail delivery, and provider credentials. The browser edition clearly labels these as unavailable. Keep an offline wallet backup before changing the site domain, because local browser data does not move between domains.
+| Variable             | Purpose                                                                     |
+| -------------------- | --------------------------------------------------------------------------- |
+| `DATABASE_URL`       | Persistent PostgreSQL connection, with the provider's required TLS settings |
+| `BETTER_AUTH_SECRET` | Stable random signing/encryption secret of at least 32 characters           |
+| `BETTER_AUTH_URL`    | Exact public HTTPS origin of this deployment                                |
+
+Keep secrets out of chat and Git, and never prefix them with `VITE_`. Production account endpoints return HTTP 503 and the UI shows setup required until configuration is present. Every hosted build applies pending `migrations/*.sql` to the configured database; a migration failure stops deployment. Preview deployments need a separate database and matching origin if accounts should work there. Wallet phrases and encrypted wallet backups remain in the browser and never enter account storage.
+
+Set `RESEND_API_KEY` and `AUTH_EMAIL_FROM` for email verification and password reset. Google, Discord, and Twitter/X each require their own registered OAuth client and callback on the public origin; see [Accounts and recovery](docs/authentication.md). Bluesky, Fluxer, and Stoat login adapters still need implementation and show **Not integrated**. A Bluesky profile link works independently of login.
+
+Pushes to `main` trigger deployments when Vercel's Git integration is enabled. The Git push is immediate; deployment takes as long as the queued install, build, and database migration. Check **Vercel → Deployments** for the actual URL and ready/failed status. This workspace does not have access to the Vercel deployment API, so a successful push is not evidence that a deployment is live. Keep an offline wallet backup before changing the site domain, because local browser data does not move between domains.
 
 ## Run
 
@@ -40,8 +50,11 @@ The development server uses port 8080. Local accounts persist in `.data/fathom`,
 npm run typecheck
 npm run lint
 npm test
-npm run test:auth  # running development server required; creates a disposable test account
-npm run test:e2e   # running server + Playwright Chromium required
+npm run test:auth     # running development server required; creates disposable test accounts
+npm run test:profile  # checks private account draft ownership over real HTTP
+npm run test:e2e      # running server + Playwright Chromium; includes disposable account UI checks
+npm run build:vercel
+npm run test:hosted   # isolated production smoke; uses the built site and actual API entry
 npm run build
 ```
 
@@ -60,6 +73,16 @@ Install the browser for UI tests with `npx playwright install chromium`. Browser
 - Browser-generated 24-word BIP39 wallets, offline backup acknowledgment and word challenge, BTC/ETH/SOL/Cosmos/XRP/NEAR public addresses, passphrase-only AES-GCM encryption using PBKDF2-SHA256 (600,000 iterations), encrypted backup import/export, and password-gated recovery reveal. Generating NEAR/XRP addresses does not fund or activate their accounts.
 - Email/password and Unicode username login, authenticator enrollment with verification, single-use recovery codes, server-enforced session limits, account linking, and direct Google/Discord/Twitter adapters when configured.
 - Responsive desktop/mobile layout and keyboard-accessible dialogs.
+
+## Creator profiles, wishlists, and donations
+
+Open **Profile** in the sidebar. Create a Unicode display name and bio, up to 20 ordered links, and up to 20 wishlist items with exact optional prices and currency codes. Optional personal links open AllMyLinks, Throne, NOWPayments, or Bluesky. These service links are not account verification or provider integrations.
+
+Support options include a hosted bank/payment checkout link and up to 10 validated public crypto addresses with network labels, copy buttons, and explorer links. The app does not collect bank account numbers, create payment invoices, process payments, guarantee wishlist fulfillment, or custody donated funds. Merchants and payment providers handle their own checkout and regional eligibility.
+
+**Save local draft** explicitly saves to this browser. **Export profile** creates a public-data-only backup; import validates every field before replacing the editor. Switching dashboard tabs preserves unsaved edits. **Save to account** / **Load from account** explicitly write/read a private draft under the signed-in account; they never publish it.
+
+**Share public profile** creates a snapshot URL containing the public profile in the `#profile=` fragment. Anyone with that URL can read its contents, including donation addresses. Opening a snapshot presents a read-only profile and does not change the visitor's local draft; **Use as local draft** is an explicit action. Editing a draft does not change previously shared links. This release does not create a permanent username page or social feed. Large profiles can create long URLs; export JSON when a messaging service rejects the link. Only public HTTPS links are accepted; listed profiles and crypto addresses are self-reported, with no ownership badge.
 
 ## TXT address import and dates
 

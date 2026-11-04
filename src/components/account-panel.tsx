@@ -10,7 +10,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { authClient, SOCIAL_PROVIDERS } from "@/lib/auth/client";
-import { isValidUsername, normalizeUsername } from "@/lib/auth/policy";
+import {
+  isValidUsername,
+  normalizeUsername,
+  DEFAULT_SESSION_DURATION,
+  SESSION_DURATION_HEADER,
+  SESSION_DURATION_OPTIONS,
+  type SessionDuration,
+} from "@/lib/auth/policy";
 import "./account.css";
 
 type Configuration = {
@@ -22,11 +29,20 @@ type Configuration = {
 type LinkedAccount = { id: string; providerId: string; accountId: string };
 type Setup = { totpURI: string; backupCodes: string[] };
 
-async function request<T>(path: string, body?: Record<string, unknown>): Promise<T> {
+async function request<T>(
+  path: string,
+  body?: Record<string, unknown>,
+  duration?: SessionDuration,
+): Promise<T> {
   const response = await fetch(`/api/auth/${path}`, {
     method: body ? "POST" : "GET",
     credentials: "same-origin",
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers: body
+      ? {
+          "content-type": "application/json",
+          ...(duration ? { [SESSION_DURATION_HEADER]: duration } : {}),
+        }
+      : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   const result = await response.json();
@@ -45,6 +61,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [sessionDuration, setSessionDuration] = useState<SessionDuration>(DEFAULT_SESSION_DURATION);
   const [challenge, setChallenge] = useState(false);
   const [backupMode, setBackupMode] = useState(false);
   const [code, setCode] = useState("");
@@ -150,13 +167,18 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           throw new Error(
             "Use 1–64 characters. Symbols, spaces, and Unicode are welcome; remove surrounding whitespace or invisible/control characters.",
           );
-        await request("sign-up/email", {
-          email,
-          password,
-          name: username,
-          username: normalizeUsername(username),
-          displayUsername: normalizeUsername(username),
-        });
+        await request(
+          "sign-up/email",
+          {
+            email,
+            password,
+            name: username,
+            username: normalizeUsername(username),
+            displayUsername: normalizeUsername(username),
+            rememberMe,
+          },
+          sessionDuration,
+        );
         setPassword("");
         await refetch();
         setNotice("Account created. Add a second factor and another sign-in method below.");
@@ -170,6 +192,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           password,
           rememberMe,
         },
+        sessionDuration,
       );
       setPassword("");
       if (response.twoFactorRedirect) {
@@ -191,6 +214,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         : await authClient.signIn.social({
             provider: provider as "google" | "discord" | "twitter",
             callbackURL: "/login",
+            fetchOptions: { headers: { [SESSION_DURATION_HEADER]: sessionDuration } },
           });
       if (result.error)
         throw new Error(result.error.message || "Could not start provider sign-in.");
@@ -215,7 +239,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                 ? provider.label
                 : provider.supported
                   ? "Requires this provider's OAuth credentials on the server"
-                  : "Adapter not yet implemented"
+                  : provider.requirement
             }
           >
             <span className="account-provider-mark" aria-hidden="true">
@@ -395,20 +419,42 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                     </small>
                   </label>
                 )}
-                {mode === "login" && (
+                {(mode === "login" || mode === "signup") && (
+                  <label>
+                    Sign in again after
+                    <select
+                      value={sessionDuration}
+                      onChange={(event) =>
+                        setSessionDuration(event.target.value as SessionDuration)
+                      }
+                    >
+                      {SESSION_DURATION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <small>
+                      The server ends this session at the chosen time, including after two-factor
+                      verification.
+                    </small>
+                  </label>
+                )}
+                {(mode === "login" || mode === "signup") && (
                   <label className="account-checkbox">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(event) => setRememberMe(event.target.checked)}
                     />
-                    Keep me signed in for up to 7 days
+                    Remember me in this browser
                   </label>
                 )}
-                {mode === "login" && (
+                {(mode === "login" || mode === "signup") && (
                   <p className="account-help">
-                    Unchecked: a browser-session cookie. The server expires all sessions after 7
-                    days; closing the browser may retain session cookies if restore is enabled.
+                    Unchecked: a browser-session cookie. Browser restore may keep that cookie; the
+                    selected server deadline still applies. Social providers may also keep their own
+                    sessions.
                   </p>
                 )}
               </>
@@ -479,6 +525,11 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               <strong>{user.name}</strong>
               <p>{user.email}</p>
               <small>{user.emailVerified ? "Verified email" : "Email not verified"}</small>
+              {session.session.expiresAt && (
+                <p className="account-session-expiry">
+                  Sign in again by {new Date(session.session.expiresAt).toLocaleString()}
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -528,7 +579,8 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           <p className="account-help">
             Authenticator codes protect email and username sign-in, using the standard 6 digits and
             30-second interval. Social sign-in uses the provider’s security settings; enable MFA
-            there too. Single-use backup codes recover authenticator access.
+            there too. Save the 16-character single-use backup codes to recover authenticator
+            access.
           </p>
           <label className="account-label">
             Current password

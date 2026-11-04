@@ -33,6 +33,7 @@ import {
   Trash2,
   Upload,
   Wallet,
+  UserRound,
   X,
 } from "lucide-react";
 import { CHAINS, CHAIN_IDS, chainLabel, activityKey, type ChainId } from "@/lib/chains";
@@ -49,14 +50,16 @@ import { useOnlineStatus, useWorkspacePreferences } from "@/lib/workspace-prefer
 import { WalletPanel } from "./wallet-panel";
 import { AccountPanel } from "@/components/account-panel";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { AccountCreatorProfile } from "./account-creator-profile";
 
-type Tab = "Overview" | "Activity" | "Wallets" | "Networks";
+type Tab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile";
 type Modal = "address" | "wallet" | "account" | "settings" | "edit" | null;
 const NAV = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Activity", icon: Activity },
   { name: "Wallets", icon: Wallet },
   { name: "Networks", icon: Globe2 },
+  { name: "Profile", icon: UserRound },
 ] as const;
 const EXAMPLES = [
   {
@@ -97,10 +100,27 @@ export function Dashboard() {
   const [menu, setMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    if (
+      !window.location.hash.startsWith("#profile=") &&
+      (window.location.pathname.replace(/\/+$/, "") === "/login" ||
+        (parameters.get("reset") === "1" && parameters.has("token")))
+    )
+      setModal("account");
+  }, []);
+  useEffect(() => {
     void Promise.resolve(useLedger.persist.rehydrate()).then(() =>
       useLedger.getState().setHydrated(true),
     );
   }, []);
+  useEffect(() => {
+    const showSharedProfile = () => {
+      if (window.location.hash.startsWith("#profile=")) setTab("Profile");
+    };
+    showSharedProfile();
+    window.addEventListener("hashchange", showSharedProfile);
+    return () => window.removeEventListener("hashchange", showSharedProfile);
+  }, [setTab]);
   useEffect(() => {
     if (!toast) return;
     const id = setTimeout(() => setToast(""), 4500);
@@ -443,7 +463,9 @@ export function Dashboard() {
                     ? "Follow the flow."
                     : tab === "Wallets"
                       ? "A home for your keys."
-                      : "Explore the networks."}
+                      : tab === "Profile"
+                        ? "Your corner of the internet."
+                        : "Explore the networks."}
               </h1>
               <p>
                 {tab === "Overview"
@@ -452,7 +474,9 @@ export function Dashboard() {
                     ? "Recent public transactions, together in one timeline."
                     : tab === "Wallets"
                       ? "Create locally. Back up carefully. Stay in control."
-                      : "See what each network makes available before you add an address."}
+                      : tab === "Profile"
+                        ? "Your links, wishlist, and ways to support you, in one place."
+                        : "See what each network makes available before you add an address."}
               </p>
             </div>
             <div className="heading-actions">
@@ -1094,6 +1118,9 @@ export function Dashboard() {
               </div>
             </section>
           )}
+          <div hidden={tab !== "Profile"}>
+            <AccountCreatorProfile onOpenAccount={() => setModal("account")} />
+          </div>
           <footer className="page-footer">
             <span>
               <span className="footer-brand">fathom</span> A clearer view of your on-chain world.

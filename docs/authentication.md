@@ -7,9 +7,9 @@ Watching public addresses and creating local wallets work without an account. Ac
 - Email/password registration and sign-in.
 - Explicit username sign-in mode, including meaningful Unicode, punctuation, emoji, internal spaces, and `@`.
 - Usernames are case-sensitive and normalized to NFC before uniqueness checks. They contain 1–64 Unicode code points and cannot contain surrounding whitespace or control/invisible formatting characters. Passwords accept arbitrary character categories, 12–256 UTF-16 code units. Better Auth's built-in scrypt password hashing applies Unicode NFKC normalization.
-- Authenticator enrollment using a manual secret or `otpauth:` link. Activation requires a valid six-digit RFC6238 code. Standard codes rotate every 30 seconds. Ten encrypted, single-use backup codes support authenticator recovery. Generating new backup codes invalidates the previous set.
+- Authenticator enrollment using a manual secret or `otpauth:` link. Activation requires a valid six-digit RFC6238 code. Standard codes rotate every 30 seconds. Ten encrypted, single-use backup codes containing 16 random alphanumeric characters support authenticator recovery. Generating new backup codes invalidates the previous set.
 - TOTP protects email and username sign-in. OAuth providers use their own MFA/security policies; the local authenticator does not add another challenge to OAuth callbacks.
-- A checked “Keep me signed in” option makes a persistent cookie; unchecked uses a browser-session cookie. The server limits sessions to an absolute seven days and disables activity-based rolling refresh. Browser session restore can retain session cookies. There is no cosmetic code-length/expiration slider.
+- Choose an absolute session lifetime of one hour, one day (default), or seven days. The database records the deadline and activity never extends it. A checked “Remember me” option makes a persistent email/username login cookie; unchecked uses a browser-session cookie. Browser session restore can retain session cookies, but cannot extend the server deadline. The chosen duration also applies to social sign-in and persists across authenticator/backup-code verification. Standard TOTP settings remain fixed for authenticator compatibility.
 - Direct Google, Discord, and Twitter/X OAuth when configured. Explicit account linking requires proof through the provider; implicit merging of same-email accounts is disabled. Linking requires the same verified email on both accounts. The server prevents removal of the last sign-in method.
 - Social accounts with a verified email may add an independent password after fresh authentication. Account recovery is independent of wallet key recovery.
 
@@ -24,6 +24,8 @@ node scripts/auth-integration.mjs http://127.0.0.1:8080
 ```
 
 The test creates a disposable account and exercises real HTTP endpoints, cookies, Unicode username/password sign-in, verified TOTP, and recovery-code replay protection. It does not contact social providers or print secrets.
+
+`npm test` also exercises session policies against Better Auth's real HTTP handler using an isolated memory database. It checks actual expiration, remembered and browser-session cookies, invalid choices, two-factor continuation, forged continuation cookies, and backup-code recovery. Login requests use the bounded `x-fathom-session-duration` header (`1h`, `1d`, or `7d`). A signed HttpOnly cookie lasts up to ten minutes while OAuth or 2FA completes, then is removed. Missing or invalid continuation policy cookies fall back to the shortest lifetime. Cookie lifetime and database lifetime agree; server expiry is authoritative.
 
 ## Production configuration
 
@@ -47,7 +49,7 @@ Register the complete HTTPS callback URL in each provider's developer console. P
 
 For verification and password reset email, set `RESEND_API_KEY` and `AUTH_EMAIL_FROM` using a verified sending domain. Requests go to `https://api.resend.com/emails`. The secret must be available to this server's process; a proxy placeholder alone may not suit every deployment. Reset email requests use generic existence-neutral responses and revoke other sessions after a successful password reset.
 
-The built-in in-process rate limiter and account-level authenticator lockout support a single instance. A multi-instance production deployment needs a shared rate-limit store or gateway rate limits, database backups, configured email delivery, HTTPS, and provider-specific end-to-end verification.
+Rate limits use the shared PostgreSQL `rateLimit` table, including atomic increments and unique endpoint/IP counters, so a new serverless instance cannot reset the limit. Login allows ten attempts per minute per IP and endpoint; signup allows five, and password-reset/verification emails allow three. Account-level authenticator lockout also persists in the database. Deploy migration `0004_auth_rate_limit.sql` before enabling authentication. IP headers must come from the hosting platform's trusted proxy; direct self-hosting must overwrite untrusted forwarded headers. Database backups, configured email delivery, HTTPS, and provider-specific end-to-end verification remain deployment requirements.
 
 ## Integrations requiring further work
 

@@ -5,19 +5,21 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { isMigrationFile, migrationName, pendingMigrations } from "./migration-plan.mjs";
-import { projectRoot } from "./with-app-env.mjs";
+import { fileURLToPath } from "node:url";
+const projectRoot = () => fileURLToPath(new URL("../", import.meta.url));
 
 const AUTH_MIGRATION = "0001_auth.sql";
 
 /**
  * The auth-on copy of the Better Auth schema and its source, or null when the
- * app has not turned sign-in on (the shipped state).
+ * app has no schema copy in a temporary fixture.
  */
 function authSchemaCopy(root) {
   const copy = join(root, "migrations", AUTH_MIGRATION);
@@ -56,10 +58,31 @@ test("non-.sql entries are dropped (readdir also yields the auth/ directory)", (
   assert.deepEqual(pendingMigrations(["auth", "README.md"], []), []);
 });
 
-test("the auth schema ships outside the globbed directory", () => {
+test("account, rate-limit and profile migrations ship in order without descending into templates", () => {
   const migrationsDir = join(projectRoot(), "migrations");
-  assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), []);
+  const files = pendingMigrations(readdirSync(migrationsDir), []);
+  assert.deepEqual(
+    files.map(({ name }) => name),
+    [
+      "0001_auth.sql",
+      "0002_vaults.sql",
+      "0003_account_security.sql",
+      "0004_auth_rate_limit.sql",
+      "0005_creator_profiles.sql",
+    ],
+  );
+  assert.equal(
+    files.some(({ name }) => name === "auth"),
+    false,
+  );
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
+  assert.deepEqual(
+    pendingMigrations(
+      readdirSync(migrationsDir),
+      files.map(({ name }) => name),
+    ),
+    [],
+  );
 });
 
 test("this workspace's auth schema copy is byte-identical to its source", () => {
@@ -76,15 +99,19 @@ test("this workspace's auth schema copy is byte-identical to its source", () => 
 
 test("the copy check reads both files and catches an edit", () => {
   const root = mkdtempSync(join(tmpdir(), "auth-schema-"));
-  mkdirSync(join(root, "migrations/auth"), { recursive: true });
-  writeFileSync(join(root, "migrations/auth", AUTH_MIGRATION), "create table t ();\n");
-  assert.equal(authSchemaCopy(root), null);
+  try {
+    mkdirSync(join(root, "migrations/auth"), { recursive: true });
+    writeFileSync(join(root, "migrations/auth", AUTH_MIGRATION), "create table t ();\n");
+    assert.equal(authSchemaCopy(root), null);
 
-  writeFileSync(join(root, "migrations", AUTH_MIGRATION), "create table t ();\n");
-  const same = authSchemaCopy(root);
-  assert.equal(same.copy, same.source);
+    writeFileSync(join(root, "migrations", AUTH_MIGRATION), "create table t ();\n");
+    const same = authSchemaCopy(root);
+    assert.equal(same.copy, same.source);
 
-  writeFileSync(join(root, "migrations", AUTH_MIGRATION), "create table t (x int);\n");
-  const drifted = authSchemaCopy(root);
-  assert.notEqual(drifted.copy, drifted.source);
+    writeFileSync(join(root, "migrations", AUTH_MIGRATION), "create table t (x int);\n");
+    const drifted = authSchemaCopy(root);
+    assert.notEqual(drifted.copy, drifted.source);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

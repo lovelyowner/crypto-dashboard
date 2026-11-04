@@ -1,30 +1,31 @@
 /** Server-only, same-origin authentication. No platform broker or embedded OAuth credentials. */
 import { betterAuth } from "better-auth";
 import { twoFactor, username } from "better-auth/plugins";
-import { tanstackStartCookies } from "better-auth/tanstack-start";
-import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { getPglite } from "../db";
 import { pgliteDialect } from "./pglite-dialect";
-import { isValidUsername, normalizeUsername, ACCOUNT_SESSION_POLICY } from "./policy";
+import {
+  isValidUsername,
+  normalizeUsername,
+  ACCOUNT_SESSION_POLICY,
+  ACCOUNT_RATE_LIMIT_POLICY,
+} from "./policy";
+import { sessionDurationPlugin } from "./session-duration";
+import { configuredAuthOrigin } from "./configuration";
 
 const env = (name: string) => process.env[name]?.trim() || undefined;
-export const authIsProduction = import.meta.env.PROD || env("NODE_ENV") === "production";
+export const authIsProduction =
+  import.meta.env?.PROD || env("NODE_ENV") === "production" || env("VERCEL") === "1";
 const production = authIsProduction;
-const explicitBaseURL = env("BETTER_AUTH_URL");
+const explicitBaseURL = configuredAuthOrigin(env("BETTER_AUTH_URL"), production);
 const databaseUrl = env("DATABASE_URL");
 const configuredSecret = env("BETTER_AUTH_SECRET");
 export const authConfigured =
   !production ||
-  Boolean(
-    databaseUrl &&
-    configuredSecret &&
-    configuredSecret.length >= 32 &&
-    explicitBaseURL?.startsWith("https://"),
-  );
+  Boolean(databaseUrl && configuredSecret && configuredSecret.length >= 32 && explicitBaseURL);
 
 function developmentSecret(): string {
   const directory = join(process.cwd(), ".local");
@@ -51,11 +52,11 @@ const emailConfigured = Boolean(env("RESEND_API_KEY") && env("AUTH_EMAIL_FROM"))
 export function publicAuthConfiguration() {
   return {
     configured: authConfigured,
-    emailRecovery: emailConfigured,
+    emailRecovery: authConfigured && emailConfigured,
     providers: {
-      google: Boolean(googleId && googleSecret),
-      discord: Boolean(discordId && discordSecret),
-      twitter: Boolean(twitterId && twitterSecret),
+      google: Boolean(authConfigured && googleId && googleSecret),
+      discord: Boolean(authConfigured && discordId && discordSecret),
+      twitter: Boolean(authConfigured && twitterId && twitterSecret),
     },
     production,
   };
@@ -132,19 +133,7 @@ export const auth = betterAuth({
     },
   },
   session: ACCOUNT_SESSION_POLICY,
-  rateLimit: {
-    enabled: true,
-    storage: "memory",
-    window: 60,
-    max: 100,
-    customRules: {
-      "/sign-in/*": { window: 60, max: 10 },
-      "/sign-up/*": { window: 60, max: 5 },
-      "/two-factor/*": { window: 60, max: 10 },
-      "/request-password-reset": { window: 60, max: 3 },
-      "/send-verification-email": { window: 60, max: 3 },
-    },
-  },
+  rateLimit: ACCOUNT_RATE_LIMIT_POLICY,
   advanced: { cookiePrefix: "fathom", useSecureCookies: production },
   plugins: [
     username({
@@ -157,16 +146,13 @@ export const auth = betterAuth({
     twoFactor({
       issuer: "Fathom",
       totpOptions: { digits: 6, period: 30 },
-      backupCodeOptions: { amount: 10, length: 10, storeBackupCodes: "encrypted" },
+      backupCodeOptions: { amount: 10, length: 16, storeBackupCodes: "encrypted" },
     }),
-    tanstackStartCookies(),
+    sessionDurationPlugin(),
   ],
 });
 
 export const SESSION_TOKEN_COOKIE = production
   ? "__Secure-fathom.session_token"
   : "fathom.session_token";
-export function readSessionToken(): string | null {
-  return getCookie(SESSION_TOKEN_COOKIE) ?? null;
-}
 export { GROK_PROVIDERS } from "./providers";

@@ -5,7 +5,10 @@ export type DbSource = "neon" | "pglite";
 
 // An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
 // "unset" — otherwise production would silently run on the PGLite fallback.
-const productionBuild = import.meta.env.PROD || process.env.NODE_ENV === "production";
+const productionBuild =
+  import.meta.env?.PROD === true ||
+  process.env.NODE_ENV === "production" ||
+  process.env.VERCEL === "1";
 const rawDatabaseUrl = typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
 const databaseUrl = rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
 
@@ -98,6 +101,19 @@ function createNeonSql(): Promise<Sql> {
   return globalRef.__pgSqlPromise__;
 }
 
+/** Plain Node development/API tests do not have Vite's import.meta.glob transform. */
+async function readLocalMigrations(): Promise<Record<string, string>> {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const directory = resolve(process.cwd(), "migrations");
+  const entries = await readdir(directory);
+  const migrations: Record<string, string> = {};
+  for (const { name } of pendingMigrations(entries, [])) {
+    migrations[name] = await readFile(resolve(directory, name), "utf8");
+  }
+  return migrations;
+}
+
 async function createPgliteSql(): Promise<Sql> {
   // Embedded Postgres, imported on demand so it never loads on the Neon path.
   // One in-memory instance per process, shared across HMR module instances, so
@@ -133,11 +149,13 @@ async function createPgliteSql(): Promise<Sql> {
   // passes serialized on a global chain so concurrent callers never
   // double-apply.
   const migrate = async (): Promise<void> => {
-    const migrations = import.meta.glob("/migrations/*.sql", {
-      query: "?raw",
-      import: "default",
-      eager: true,
-    }) as Record<string, string>;
+    const migrations = import.meta.env
+      ? (import.meta.glob("/migrations/*.sql", {
+          query: "?raw",
+          import: "default",
+          eager: true,
+        }) as Record<string, string>)
+      : await readLocalMigrations();
     const doneRows = await pg.query<{ name: string }>("select name from _migrations");
     const done = doneRows.rows.map((r) => r.name);
     for (const { name, path } of pendingMigrations(Object.keys(migrations), done)) {
