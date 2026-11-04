@@ -138,7 +138,8 @@ export function createSqlPaymentStore(sql: Pick<Sql, "query">) {
           update creator_payment_intents set status='paid',paid_at=now(),confirmations=$3
           where id in(select intent_id from claimed) returning id,message_id
         ), delivered as (
-          update creator_messages set payment_status='paid'
+          update creator_messages set payment_status='paid',
+            last_activity_at=greatest(last_activity_at,clock_timestamp())
           where id in(select message_id from paid) and payment_id=$1 and payment_status='pending'
           returning id
         ) select id from paid`,

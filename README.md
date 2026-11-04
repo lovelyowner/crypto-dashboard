@@ -56,6 +56,7 @@ npm run test:publication # verifies explicit publishing and handle ownership
 npm run test:sessions # verifies actual session revocation and account isolation
 npm run test:contact # verifies inbox privacy and message payment gates
 npm run test:creator-setup # verifies publication refresh, unsaved fees, and checkout controls
+npm run test:inbox-activity # verifies private reply activity, unread state, and refresh behavior
 npm run test:e2e      # running server + Playwright Chromium; includes disposable account UI checks
 npm run build:vercel
 npm run test:hosted   # isolated production smoke; uses the built site and actual API entry

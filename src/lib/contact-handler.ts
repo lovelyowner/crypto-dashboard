@@ -6,7 +6,12 @@ import {
   type ContactConfiguration,
   type InboxFolder,
 } from "./creator-contact";
-import { contactMessageDto, contactThreadDto, type ContactStore } from "./contact-store";
+import {
+  contactMessageDto,
+  contactThreadDto,
+  validInboxCursor,
+  type ContactStore,
+} from "./contact-store";
 import type { ProfileSession } from "./profile-handler";
 
 export type ContactSession = ProfileSession & { user: { id: string; name?: string | null } };
@@ -251,7 +256,8 @@ export function createContactHandler(dependencies: ContactHandlerDependencies) {
         if (!["received", "sent", "donations"].includes(folder))
           throw new RequestError(400, "Choose a supported inbox folder.");
         const cursor = url.searchParams.get("cursor");
-        if (cursor) identifier(cursor);
+        if (cursor && !validInboxCursor(cursor))
+          throw new RequestError(400, "The inbox page could not be read. Refresh the inbox.");
         const result = await dependencies.store.listMessages(
           owner.user.id,
           folder as InboxFolder,
@@ -260,6 +266,11 @@ export function createContactHandler(dependencies: ContactHandlerDependencies) {
         return respond({
           messages: result.messages.map((m) => contactMessageDto(m, owner.user.id)),
           nextCursor: result.nextCursor,
+          unreadCounts:
+            result.unreadCounts ??
+            (dependencies.store.unreadCounts
+              ? await dependencies.store.unreadCounts(owner.user.id)
+              : { received: 0, sent: 0, donations: 0 }),
         });
       }
       const thread = /^\/api\/inbox\/([^/]+)(\/replies)?$/.exec(path);
@@ -316,7 +327,9 @@ export function createContactHandler(dependencies: ContactHandlerDependencies) {
         if (request.method === "PATCH") {
           const body = envelope(await readJson(request), ["read"]);
           if (body.read !== true) throw new RequestError(400, "Send read: true.");
-          if (!(await dependencies.store.markRead(owner.user.id, id)))
+          if (
+            !(await dependencies.store.markRead(owner.user.id, id, item.message.activityRevision))
+          )
             throw new RequestError(404, "Message not found.");
           const updated = await dependencies.store.readThread(owner.user.id, id, false);
           if (!updated) throw new RequestError(404, "Message not found.");

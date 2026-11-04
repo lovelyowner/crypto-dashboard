@@ -74,7 +74,7 @@ function fixture() {
       writes++;
       return true;
     },
-    markRead: async (userId) => userId === row.recipientId,
+    markRead: async (userId) => [row.recipientId, row.senderId].includes(userId),
   };
   const dependencies: ContactHandlerDependencies = {
     configured: true,
@@ -299,7 +299,7 @@ test("inbox and replies remain participant-only and incoming paid follow-ups can
   );
   assert.equal(
     (await f.request("/api/inbox/message-1", "PATCH", { read: true }, "sender-id")).status,
-    404,
+    200,
   );
   assert.equal(
     (await f.request("/api/inbox/message-1", "PATCH", { read: true }, "creator-id")).status,
@@ -309,6 +309,78 @@ test("inbox and replies remain participant-only and incoming paid follow-ups can
     (await f.request("/api/inbox?folder=all-accounts", "GET", undefined, "creator-id")).status,
     400,
   );
+});
+test("inbox activity metadata and unread counts use the current viewer without exposing read receipts", async () => {
+  const f = fixture();
+  const readAt = new Date(now - 30_000);
+  const senderReadAt = new Date(now - 10_000);
+  Object.assign(f.row, {
+    activityRevision: 3,
+    recipientReadRevision: 2,
+    senderReadRevision: 3,
+    readAt,
+    senderReadAt,
+    lastActivityAt: new Date(now - 5_000),
+    latestReply: {
+      id: "reply-3",
+      text: "Newest 🌙",
+      createdAt: new Date(now - 5_000).toISOString(),
+      fromCreator: false,
+    },
+  });
+  f.dependencies.store.listMessages = async () => ({ messages: [f.row], nextCursor: null });
+  const counted: string[] = [];
+  f.dependencies.store.unreadCounts = async (id) => {
+    counted.push(id);
+    return { received: id === "creator-id" ? 1 : 0, sent: 0, donations: 0 };
+  };
+  const received = await (await f.request("/api/inbox", "GET", undefined, "creator-id")).json();
+  assert.deepEqual(received.unreadCounts, { received: 1, sent: 0, donations: 0 });
+  assert.equal(received.messages[0].unread, true);
+  assert.equal(received.messages[0].latestReply.text, "Newest 🌙");
+  assert.equal(received.messages[0].readAt, readAt.toISOString());
+  assert.equal(received.messages[0].lastActivityAt, new Date(now - 5_000).toISOString());
+  const sent = await (
+    await f.request("/api/inbox?folder=sent", "GET", undefined, "sender-id")
+  ).json();
+  assert.equal(sent.messages[0].unread, false);
+  assert.equal(sent.messages[0].readAt, senderReadAt.toISOString());
+  assert.deepEqual(counted, ["creator-id", "sender-id"]);
+  for (const field of [
+    "senderId",
+    "recipientId",
+    "senderReadAt",
+    "activityRevision",
+    "recipientReadRevision",
+    "senderReadRevision",
+  ])
+    assert.equal(field in received.messages[0], false);
+  assert.equal(JSON.stringify(sent).includes(readAt.toISOString()), false);
+  const marked: unknown[][] = [];
+  f.dependencies.store.markRead = async (...args) => {
+    marked.push(args);
+    return true;
+  };
+  assert.equal(
+    (await f.request("/api/inbox/message-1", "PATCH", { read: true }, "sender-id")).status,
+    200,
+  );
+  assert.deepEqual(marked, [["sender-id", "message-1", 3]]);
+  const beforeGuest = counted.length;
+  assert.equal((await f.request("/api/inbox")).status, 401);
+  assert.equal(counted.length, beforeGuest);
+  for (const cursor of ["v1_bad", "x".repeat(513), "[bad]"])
+    assert.equal(
+      (
+        await f.request(
+          `/api/inbox?cursor=${encodeURIComponent(cursor)}`,
+          "GET",
+          undefined,
+          "sender-id",
+        )
+      ).status,
+      400,
+    );
 });
 test("message writes are bounded, rate limited, cross-site protected and internal errors never leak", async () => {
   const f = fixture();
@@ -346,4 +418,19 @@ test("message writes are bounded, rate limited, cross-site protected and interna
   assert.doesNotMatch(await failure.text(), /credential/);
   const unconfigured = createContactHandler({ ...f.dependencies, configured: false });
   assert.equal((await unconfigured(new Request(origin + "/api/inbox"))).status, 503);
+});
+
+test("inbox API uses the page's snapshot counters instead of a later separate read", async () => {
+  const f = fixture();
+  f.dependencies.store.listMessages = async () => ({
+    messages: [f.row],
+    nextCursor: null,
+    unreadCounts: { received: 2, sent: 1, donations: 3 },
+  });
+  f.dependencies.store.unreadCounts = async () => {
+    throw new Error("A second count read would race");
+  };
+  const response = await f.request("/api/inbox", "GET", undefined, "creator-id");
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).unreadCounts, { received: 2, sent: 1, donations: 3 });
 });

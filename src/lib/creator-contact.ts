@@ -50,12 +50,21 @@ export type ContactMessage = {
   paymentStatus: ContactPaymentStatus;
   direction: "received" | "sent";
   readAt: string | null;
+  /** Viewer-specific activity metadata; optional for older cached responses. */
+  lastActivityAt?: string;
+  unread?: boolean;
+  latestReply?: ContactReply | null;
   paymentId?: string | null;
 };
 export type ContactReply = { id: string; text: string; createdAt: string; fromCreator: boolean };
 export type ContactThread = { message: ContactMessage; replies: ContactReply[] };
 export type InboxFolder = "received" | "sent" | "donations";
-export type InboxResponse = { messages: ContactMessage[]; nextCursor: string | null };
+export type InboxUnreadCounts = { received: number; sent: number; donations: number };
+export type InboxResponse = {
+  messages: ContactMessage[];
+  nextCursor: string | null;
+  unreadCounts?: InboxUnreadCounts;
+};
 
 function object(value: unknown, field: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))

@@ -111,6 +111,39 @@ test("payment proof claim and exact pending message delivery are atomic, replay-
   }
 });
 
+test("newly verified messages use delivery activity and a repeated proof does not reorder the inbox", async () => {
+  const f = await paymentFixture();
+  try {
+    const older = await f.pending();
+    await f.pg.query(
+      "update creator_messages set created_at='2020-01-01T00:00:00Z',last_activity_at='2020-01-01T00:00:00Z' where id=$1",
+      [older.messageId],
+    );
+    const recent = await f.pending("other");
+    await f.store.confirm(recent.id, "ethereum:1:recent-delivery", 3);
+    assert.equal((await f.contacts.listMessages("owner", "received", null)).messages.length, 1);
+    await f.store.confirm(older.id, "ethereum:1:older-delivery", 3);
+    const delivered = (await f.contacts.listMessages("owner", "received", null)).messages;
+    assert.deepEqual(
+      delivered.map((message) => message.id),
+      [older.messageId, recent.messageId],
+    );
+    const activity = async () =>
+      (
+        await f.pg.query<{ value: string }>(
+          "select last_activity_at::text as value from creator_messages where id=$1",
+          [older.messageId],
+        )
+      ).rows[0].value;
+    const verifiedActivity = await activity();
+    assert.ok(Date.parse(verifiedActivity) > Date.parse("2020-01-01T00:00:00Z"));
+    await f.store.confirm(older.id, "ethereum:1:older-delivery", 3);
+    assert.equal(await activity(), verifiedActivity);
+  } finally {
+    await f.pg.close();
+  }
+});
+
 test("merchant credentials retain encrypted invoice versions and limits consume atomically", async () => {
   const f = await paymentFixture();
   try {

@@ -13,6 +13,7 @@ import {
   type ContactKind,
   type ContactPaymentStatus,
   type InboxFolder,
+  type InboxUnreadCounts,
 } from "./creator-contact";
 
 export type StoredContactMessage = {
@@ -28,6 +29,13 @@ export type StoredContactMessage = {
   paymentId: string | null;
   createdAt: Date | string;
   readAt: Date | string | null;
+  senderReadAt?: Date | string | null;
+  lastActivityAt?: Date | string;
+  activityRevision?: number;
+  recipientReadRevision?: number;
+  senderReadRevision?: number;
+  latestReply?: ContactReply | null;
+  cursorActivityAt?: string;
 };
 export type PendingMessageInput = {
   id: string;
@@ -42,9 +50,7 @@ export type PendingMessageInput = {
 export type FreeMessageInput = Omit<PendingMessageInput, "id" | "paymentId">;
 export interface ContactStore {
   resolveRecipient(handle: string): Promise<ContactRecipient | null>;
-  readConfiguration(
-    userId: string,
-  ): Promise<{
+  readConfiguration(userId: string): Promise<{
     handle: string | null;
     settings: ContactSettings;
     ethereumAddresses: ContactRecipient["ethereumAddresses"];
@@ -59,22 +65,90 @@ export interface ContactStore {
     userId: string,
     folder: InboxFolder,
     cursor: string | null,
-  ): Promise<{ messages: StoredContactMessage[]; nextCursor: string | null }>;
+  ): Promise<{
+    messages: StoredContactMessage[];
+    nextCursor: string | null;
+    unreadCounts?: InboxUnreadCounts;
+  }>;
+  unreadCounts?(userId: string): Promise<InboxUnreadCounts>;
   readThread(
     userId: string,
     id: string,
     markRead?: boolean,
   ): Promise<{ message: StoredContactMessage; replies: ContactReply[] } | null>;
   reply(userId: string, id: string, text: string): Promise<boolean>;
-  markRead(userId: string, id: string): Promise<boolean>;
+  markRead(userId: string, id: string, revision?: number): Promise<boolean>;
 }
 const messageColumns = `id, recipient_id as "recipientId", recipient_handle as "recipientHandle",
  sender_id as "senderId", sender_name as "senderName", anonymous, kind, body as text,
  payment_status as "paymentStatus", payment_id as "paymentId", created_at as "createdAt",
- recipient_read_at as "readAt"`;
+ recipient_read_at as "readAt", sender_read_at as "senderReadAt",
+ last_activity_at as "lastActivityAt", activity_revision as "activityRevision",
+ recipient_read_revision as "recipientReadRevision", sender_read_revision as "senderReadRevision"`;
+const latestReplyColumns = `(select json_build_object('id',r.id,'text',r.body,'createdAt',r.created_at,
+ 'fromCreator',r.author_id=creator_messages.recipient_id) from creator_message_replies r
+ where r.message_id=creator_messages.id order by r.activity_revision desc limit 1) as "latestReply"`;
+const unreadCountsQuery = `select
+ count(*) filter(where recipient_id=$1 and kind='dm' and payment_status<>'pending' and recipient_read_revision<activity_revision)::integer as received,
+ count(*) filter(where sender_id=$1 and payment_status<>'pending' and sender_read_revision<activity_revision)::integer as sent,
+ count(*) filter(where recipient_id=$1 and kind='donation' and payment_status<>'pending' and recipient_read_revision<activity_revision)::integer as donations
+ from creator_messages where recipient_id=$1 or sender_id=$1`;
 const iso = (value: Date | string) => new Date(value).toISOString();
+type ActivityCursor = { id: string; at: string | null };
+function activityCursor(value: string): ActivityCursor {
+  if (!value.startsWith("v1_")) {
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(value)) throw new Error("Invalid inbox cursor");
+    return { id: value, at: null };
+  }
+  const encoded = value.slice(3);
+  if (!/^[A-Za-z0-9_-]{1,509}$/.test(encoded)) throw new Error("Invalid inbox cursor");
+  const decoded = Buffer.from(encoded, "base64url");
+  if (decoded.toString("base64url") !== encoded) throw new Error("Invalid inbox cursor");
+  const parts: unknown = JSON.parse(decoded.toString("utf8"));
+  if (
+    !Array.isArray(parts) ||
+    parts.length !== 2 ||
+    typeof parts[0] !== "string" ||
+    !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/.test(parts[0]) ||
+    parts[0].startsWith("0000-") ||
+    !Number.isFinite(Date.parse(parts[0])) ||
+    new Date(parts[0]).toISOString() !== `${parts[0].slice(0, 23)}Z` ||
+    typeof parts[1] !== "string" ||
+    !/^[A-Za-z0-9_-]{1,80}$/.test(parts[1])
+  )
+    throw new Error("Invalid inbox cursor");
+  return { at: parts[0], id: parts[1] };
+}
+export function validInboxCursor(value: string): boolean {
+  try {
+    activityCursor(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function nextActivityCursor(row: StoredContactMessage): string {
+  return `v1_${Buffer.from(JSON.stringify([row.cursorActivityAt, row.id])).toString("base64url")}`;
+}
+function dtoReply(reply: ContactReply): ContactReply {
+  return {
+    id: reply.id,
+    text: validateContactText(reply.text),
+    createdAt: iso(reply.createdAt),
+    fromCreator: reply.fromCreator,
+  };
+}
 export function contactMessageDto(row: StoredContactMessage, viewerId: string): ContactMessage {
   const direction = row.recipientId === viewerId ? "received" : "sent";
+  const ownReadAt = direction === "received" ? row.readAt : (row.senderReadAt ?? row.createdAt);
+  const readRevision =
+    direction === "received" ? row.recipientReadRevision : row.senderReadRevision;
+  const unread =
+    row.paymentStatus === "pending"
+      ? false
+      : readRevision === undefined
+        ? direction === "received" && !row.readAt
+        : readRevision < (row.activityRevision ?? 0);
   return {
     id: row.id,
     kind: row.kind,
@@ -85,7 +159,10 @@ export function contactMessageDto(row: StoredContactMessage, viewerId: string): 
     createdAt: iso(row.createdAt),
     paymentStatus: row.paymentStatus,
     direction,
-    readAt: row.readAt ? iso(row.readAt) : null,
+    readAt: ownReadAt ? iso(ownReadAt) : null,
+    lastActivityAt: iso(row.lastActivityAt ?? row.createdAt),
+    unread,
+    latestReply: row.latestReply ? dtoReply(row.latestReply) : null,
     ...(direction === "sent" && row.paymentStatus === "pending"
       ? { paymentId: row.paymentId }
       : {}),
@@ -132,6 +209,18 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
       await sql.query<StoredContactMessage>(
         `select ${messageColumns} from creator_messages where id=$1`,
         [id],
+      )
+    )[0] ?? null;
+  const markReadSnapshot = async (userId: string, id: string, revision?: number) =>
+    (
+      await sql.query<StoredContactMessage>(
+        `update creator_messages set
+       recipient_read_revision=case when recipient_id=$2 then greatest(recipient_read_revision,least(activity_revision,coalesce($3::integer,activity_revision))) else recipient_read_revision end,
+       recipient_read_at=case when recipient_id=$2 then now() else recipient_read_at end,
+       sender_read_revision=case when sender_id=$2 then greatest(sender_read_revision,least(activity_revision,coalesce($3::integer,activity_revision))) else sender_read_revision end,
+       sender_read_at=case when sender_id=$2 then now() else sender_read_at end
+       where id=$1 and (sender_id=$2 or (recipient_id=$2 and payment_status<>'pending')) returning ${messageColumns}`,
+        [id, userId, revision ?? null],
       )
     )[0] ?? null;
   return {
@@ -186,8 +275,8 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
     async createFreeMessage(input) {
       if (input.kind !== "dm" || input.anonymous || !input.senderId) return null;
       const rows = await sql.query<StoredContactMessage>(
-        `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status)
-       select $1,p.user_id,p.handle,$3,$4,false,'dm',$5,'free' from public_creator_profiles p
+        `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status,sender_read_at)
+       select $1,p.user_id,p.handle,$3,$4,false,'dm',$5,'free',now() from public_creator_profiles p
        join creator_contact_settings c on c.user_id=p.user_id
        where p.user_id=$2 and p.published=true and c.settings->>'dmMode'='free'
        returning ${messageColumns}`,
@@ -208,8 +297,8 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
       )
         throw new Error("Invalid pending sender");
       const rows = await sql.query<StoredContactMessage>(
-        `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status,payment_id)
-        select $1,p.user_id,p.handle,$3,$4,$5,$6,$7,'pending',$8 from public_creator_profiles p where p.user_id=$2
+        `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status,payment_id,sender_read_at)
+        select $1,p.user_id,p.handle,$3,$4,$5,$6,$7,'pending',$8,case when $3::text is null then null else now() end from public_creator_profiles p where p.user_id=$2
         returning ${messageColumns}`,
         [
           input.id,
@@ -227,7 +316,7 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
     },
     async completePendingMessage(id, paymentId) {
       const rows = await sql.query(
-        `update creator_messages set payment_status='paid' where id=$1 and payment_id=$2 and payment_status='pending' returning id`,
+        `update creator_messages set payment_status='paid',last_activity_at=greatest(last_activity_at,clock_timestamp()) where id=$1 and payment_id=$2 and payment_status='pending' returning id`,
         [id, paymentId],
       );
       if (rows.length) return true;
@@ -236,24 +325,36 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
     },
     readInternalMessage,
     async listMessages(userId, folder, cursor) {
+      const boundary = cursor ? activityCursor(cursor) : null;
       const scope =
         folder === "sent"
           ? `sender_id=$1`
           : `recipient_id=$1 and payment_status<>'pending' and kind='${folder === "donations" ? "donation" : "dm"}'`;
-      const rows = await sql.query<StoredContactMessage>(
-        `select ${messageColumns} from creator_messages
-        where ${scope} and ($2::text is null or (created_at,id)<(select created_at,id from creator_messages where id=$2 and ${scope}))
-        order by created_at desc,id desc limit 51`,
-        [userId, cursor],
+      // Page rows and counters share a statement snapshot, even when a conversation is read concurrently.
+      const [page] = await sql.query<{
+        messages: StoredContactMessage[];
+        unreadCounts: InboxUnreadCounts;
+      }>(
+        `with page as materialized (select ${messageColumns},${latestReplyColumns},
+        to_char(last_activity_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as "cursorActivityAt" from creator_messages
+        where ${scope} and ($2::text is null or (last_activity_at,id)<(coalesce($3::timestamptz,(select last_activity_at from creator_messages where id=$2 and ${scope})),$2))
+        order by last_activity_at desc,id desc limit 51), counts as (${unreadCountsQuery})
+        select coalesce((select json_agg(page order by "lastActivityAt" desc,id desc) from page),'[]'::json) as messages,
+        row_to_json(counts) as "unreadCounts" from counts`,
+        [userId, boundary?.id ?? null, boundary?.at ?? null],
       );
-      return { messages: rows.slice(0, 50), nextCursor: rows.length > 50 ? rows[49].id : null };
+      const rows = page.messages;
+      return {
+        messages: rows.slice(0, 50),
+        nextCursor: rows.length > 50 ? nextActivityCursor(rows[49]) : null,
+        unreadCounts: page.unreadCounts,
+      };
+    },
+    async unreadCounts(userId) {
+      const [row] = await sql.query<InboxUnreadCounts>(unreadCountsQuery, [userId]);
+      return row ?? { received: 0, sent: 0, donations: 0 };
     },
     async readThread(userId, id, markRead = true) {
-      if (markRead)
-        await sql.query(
-          `update creator_messages set recipient_read_at=coalesce(recipient_read_at,now()) where id=$1 and recipient_id=$2 and payment_status<>'pending'`,
-          [id, userId],
-        );
       const rows = await sql.query<StoredContactMessage>(
         `select ${messageColumns} from creator_messages where id=$1 and (sender_id=$2 or (recipient_id=$2 and payment_status<>'pending'))`,
         [id, userId],
@@ -265,34 +366,49 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
         createdAt: Date | string;
         fromCreator: boolean;
       }>(
-        `select r.id,r.body as text,r.created_at as "createdAt",r.author_id=m.recipient_id as "fromCreator" from creator_message_replies r join creator_messages m on m.id=r.message_id where r.message_id=$1 order by r.created_at,r.id limit 200`,
-        [id],
+        `select r.id,r.body as text,r.created_at as "createdAt",r.author_id=m.recipient_id as "fromCreator" from creator_message_replies r join creator_messages m on m.id=r.message_id where r.message_id=$1 and r.activity_revision<=$2 order by r.activity_revision limit 200`,
+        [id, rows[0].activityRevision],
       );
+      const message = rows[0];
+      if (markRead) {
+        const marked = await markReadSnapshot(userId, id, message.activityRevision);
+        if (marked) {
+          message.readAt = marked.readAt;
+          message.senderReadAt = marked.senderReadAt;
+          message.recipientReadRevision = marked.recipientReadRevision;
+          message.senderReadRevision = marked.senderReadRevision;
+        }
+      }
+      const threadReplies = replies.map((r) => ({ ...r, createdAt: iso(r.createdAt) }));
+      message.latestReply = threadReplies.at(-1) ?? null;
       return {
-        message: rows[0],
-        replies: replies.map((r) => ({ ...r, createdAt: iso(r.createdAt) })),
+        message,
+        replies: threadReplies,
       };
     },
     async reply(userId, id, text) {
       const rows = await sql.query(
-        `insert into creator_message_replies(id,message_id,author_id,body)
-        select $1,m.id,$3,$4 from creator_messages m left join creator_contact_settings c on c.user_id=m.recipient_id
-        where m.id=$2 and m.sender_id is not null and m.payment_status<>'pending'
-        and (m.recipient_id=$3 or (m.sender_id=$3 and c.settings->>'dmMode'='free'))
-        and (select count(*) from creator_message_replies r where r.message_id=m.id)<200 returning id`,
+        `with candidate as materialized (
+          select m.id from creator_messages m left join creator_contact_settings c on c.user_id=m.recipient_id
+          where m.id=$2 and m.sender_id is not null and m.payment_status<>'pending'
+          and (m.recipient_id=$3 or (m.sender_id=$3 and c.settings->>'dmMode'='free')) for update of m
+        ), activity as (
+          update creator_messages m set activity_revision=m.activity_revision+1,
+          last_activity_at=greatest(clock_timestamp(),m.last_activity_at+interval '1 microsecond'),
+          recipient_read_revision=case when m.recipient_id=$3 then m.activity_revision+1 else m.recipient_read_revision end,
+          sender_read_revision=case when m.sender_id=$3 then m.activity_revision+1 else m.sender_read_revision end,
+          recipient_read_at=case when m.recipient_id=$3 then now() else m.recipient_read_at end,
+          sender_read_at=case when m.sender_id=$3 then now() else m.sender_read_at end
+          from candidate where m.id=candidate.id and m.activity_revision<200
+          returning m.id,m.activity_revision,m.last_activity_at
+        ) insert into creator_message_replies(id,message_id,author_id,body,activity_revision,created_at)
+          select $1,id,$3,$4,activity_revision,last_activity_at from activity returning id`,
         [randomUUID(), id, userId, validateContactText(text)],
       );
       return rows.length === 1;
     },
-    async markRead(userId, id) {
-      return (
-        (
-          await sql.query(
-            `update creator_messages set recipient_read_at=coalesce(recipient_read_at,now()) where id=$1 and recipient_id=$2 and payment_status<>'pending' returning id`,
-            [id, userId],
-          )
-        ).length === 1
-      );
+    async markRead(userId, id, revision) {
+      return Boolean(await markReadSnapshot(userId, id, revision));
     },
   };
 }

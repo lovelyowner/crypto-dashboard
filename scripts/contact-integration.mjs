@@ -226,19 +226,32 @@ try {
     received.data.messages[0].direction === "received" && received.data.messages[0].readAt === null,
     "Incoming messages begin unread",
   );
+  check(
+    received.data.messages[0].unread === true &&
+      received.data.messages[0].latestReply === null &&
+      Number.isFinite(Date.parse(received.data.messages[0].lastActivityAt)) &&
+      received.data.unreadCounts.received === 1,
+    "Initial unread activity and counts belong to the recipient",
+  );
   const sentFolder = await sender.request("/api/inbox?folder=sent");
   check(
     sentFolder.data?.messages?.some((message) => message.id === messageId),
     "The sender sees their own outbox copy",
+  );
+  check(
+    sentFolder.data.messages[0].unread === false && sentFolder.data.unreadCounts.sent === 0,
+    "Sending a message does not mark the sender's own copy unread",
   );
   const donationFolder = await owner.request("/api/inbox?folder=donations");
   check(
     donationFolder.ok && donationFolder.data.messages.length === 0,
     "Unpaid donation notes never appear in the creator inbox",
   );
+  const strangerInbox = await stranger.request("/api/inbox");
+  check(strangerInbox.data?.messages?.length === 0, "An unrelated account sees an empty inbox");
   check(
-    (await stranger.request("/api/inbox")).data?.messages?.length === 0,
-    "An unrelated account sees an empty inbox",
+    Object.values(strangerInbox.data.unreadCounts).every((count) => count === 0),
+    "Private unread counts do not reveal other accounts' activity",
   );
   const privateThread = `/api/inbox/${messageId}`;
   check(
@@ -257,7 +270,10 @@ try {
   const read = await owner.request(privateThread);
   check(read.ok && read.data?.message?.readAt, "Reading the recipient thread records read status");
   const markRead = await sender.request(privateThread, { method: "PATCH", json: { read: true } });
-  check(markRead.status === 404, "A sender cannot mark the recipient copy as read");
+  check(
+    markRead.ok && markRead.data.message.unread === false,
+    "A sender may mark only their own conversation activity as read",
+  );
   const crossOriginReply = await owner.request(`${privateThread}/replies`, {
     method: "POST",
     json: { text: "Forged origin" },
@@ -272,6 +288,20 @@ try {
     reply.status === 201 && reply.data.replies[0]?.fromCreator === true,
     "Creators can reply privately without charging themselves",
   );
+  const senderAfterReply = await sender.request("/api/inbox?folder=sent");
+  check(
+    senderAfterReply.data.messages[0].unread === true &&
+      senderAfterReply.data.messages[0].latestReply?.text === "Thanks for your message 🌟" &&
+      senderAfterReply.data.messages[0].latestReply?.fromCreator === true &&
+      senderAfterReply.data.unreadCounts.sent === 1,
+    "Creator replies appear as unread latest activity in the sender's Sent folder",
+  );
+  const senderReadsReply = await sender.request(privateThread);
+  check(
+    senderReadsReply.data.message.unread === false &&
+      (await sender.request("/api/inbox?folder=sent")).data.unreadCounts.sent === 0,
+    "Viewing a creator reply clears only the sender's unread activity",
+  );
   const followup = await sender.request(`${privateThread}/replies`, {
     method: "POST",
     json: { text: "A free follow-up" },
@@ -279,6 +309,18 @@ try {
   check(
     followup.status === 201 && followup.data.replies.at(-1)?.fromCreator === false,
     "Sender follow-ups work while the policy remains free",
+  );
+  const creatorAfterFollowup = await owner.request("/api/inbox?folder=received");
+  check(
+    creatorAfterFollowup.data.messages[0].unread === true &&
+      creatorAfterFollowup.data.messages[0].latestReply?.text === "A free follow-up" &&
+      creatorAfterFollowup.data.unreadCounts.received === 1,
+    "A sender follow-up makes the creator's previously read conversation unread again",
+  );
+  await sender.request(privateThread, { method: "PATCH", json: { read: true } });
+  check(
+    (await owner.request("/api/inbox?folder=received")).data.unreadCounts.received === 1,
+    "A sender cannot clear the recipient's unread reply state",
   );
   const paidSettings = { ...settings, dmMode: "paid", dmEthPrice: "0.001", dmUsdPrice: "5.00" };
   check(

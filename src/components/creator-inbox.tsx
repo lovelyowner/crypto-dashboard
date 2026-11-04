@@ -3,13 +3,19 @@ import { ArrowLeft, Check, ChevronRight, LoaderCircle, Mail, RefreshCw, Send } f
 import {
   validateContactText,
   type ContactMessage,
-  type ContactReply,
   type ContactThread,
   type InboxFolder,
   type InboxResponse,
 } from "@/lib/creator-contact";
+import {
+  inboxMessageActivity,
+  inboxMessagePreview,
+  inboxMessageUnread,
+  parseInboxResponse,
+  parseInboxThread,
+  sortInboxMessages,
+} from "@/lib/contact-inbox";
 import { formatTransactionDate } from "@/lib/format";
-import { normalizePublicHandle } from "@/lib/public-profile";
 import { getPublicProfilePath } from "@/lib/profile-url";
 import { PaymentProgress } from "./public-profile-contact";
 import "./creator-inbox.css";
@@ -26,80 +32,6 @@ class InboxError extends Error {
   ) {
     super(message);
   }
-}
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("The inbox response could not be read.");
-  return value as Record<string, unknown>;
-}
-function identifier(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(value))
-    throw new Error("The inbox response could not be read.");
-  return value;
-}
-function timestamp(value: unknown): string {
-  if (typeof value !== "string" || !Number.isFinite(Date.parse(value)))
-    throw new Error("The message date could not be read.");
-  return new Date(value).toISOString();
-}
-function parseMessage(value: unknown): ContactMessage {
-  const row = record(value);
-  if (
-    !["dm", "donation"].includes(row.kind as string) ||
-    typeof row.anonymous !== "boolean" ||
-    typeof row.senderName !== "string" ||
-    row.senderName.length > 320 ||
-    !["free", "unverified", "pending", "paid"].includes(row.paymentStatus as string) ||
-    !["received", "sent"].includes(row.direction as string)
-  )
-    throw new Error("The inbox response could not be read.");
-  return {
-    id: identifier(row.id),
-    kind: row.kind as ContactMessage["kind"],
-    text: validateContactText(row.text),
-    anonymous: row.anonymous,
-    senderName: row.anonymous
-      ? "Anonymous"
-      : row.senderName.replace(/[\p{Cc}\p{Cf}]/gu, " ").slice(0, 160),
-    recipientHandle: normalizePublicHandle(row.recipientHandle),
-    createdAt: timestamp(row.createdAt),
-    paymentStatus: row.paymentStatus as ContactMessage["paymentStatus"],
-    direction: row.direction as ContactMessage["direction"],
-    readAt: row.readAt === null ? null : timestamp(row.readAt),
-    ...(row.paymentStatus === "pending" && row.direction === "sent" && row.paymentId != null
-      ? { paymentId: identifier(row.paymentId) }
-      : {}),
-  };
-}
-function parseInbox(value: unknown): InboxResponse {
-  const row = record(value);
-  if (
-    !Array.isArray(row.messages) ||
-    row.messages.length > 50 ||
-    (row.nextCursor !== null &&
-      (typeof row.nextCursor !== "string" || !row.nextCursor || row.nextCursor.length > 512))
-  )
-    throw new Error("The inbox response could not be read.");
-  return { messages: row.messages.map(parseMessage), nextCursor: row.nextCursor as string | null };
-}
-function parseThread(value: unknown): ContactThread {
-  const row = record(value);
-  if (!Array.isArray(row.replies) || row.replies.length > 500)
-    throw new Error("The conversation could not be read.");
-  return {
-    message: parseMessage(row.message),
-    replies: row.replies.map((value): ContactReply => {
-      const reply = record(value);
-      if (typeof reply.fromCreator !== "boolean")
-        throw new Error("The conversation could not be read.");
-      return {
-        id: identifier(reply.id),
-        text: validateContactText(reply.text),
-        createdAt: timestamp(reply.createdAt),
-        fromCreator: reply.fromCreator,
-      };
-    }),
-  };
 }
 function date(value: string): string {
   return `${formatTransactionDate(new Date(value).getTime())} ${new Date(value).toISOString().slice(11, 16)} UTC`;
@@ -173,6 +105,50 @@ function senderLabel(message: ContactMessage): string {
       ? "Anonymous"
       : message.senderName || "Account sender";
 }
+function unreadFolder(message: ContactMessage): InboxFolder {
+  return message.direction === "sent"
+    ? "sent"
+    : message.kind === "donation"
+      ? "donations"
+      : "received";
+}
+function readSnapshot(message: ContactMessage): string {
+  return `${message.latestReply?.id ?? "initial"}:${inboxMessageActivity(message)}`;
+}
+/** A shared pulse keeps reads paused in hidden/offline tabs and is disposed on account change. */
+function useInboxRefresh(available: boolean, onRefresh: () => void): boolean {
+  const [active, setActive] = useState(false);
+  const refreshRef = useRef(onRefresh);
+  refreshRef.current = onRefresh;
+  useEffect(() => {
+    if (!available) {
+      setActive(false);
+      return;
+    }
+    const canRefresh = () => document.visibilityState === "visible" && navigator.onLine !== false;
+    const resume = () => {
+      const current = canRefresh();
+      setActive(current);
+      if (current) refreshRef.current();
+    };
+    setActive(canRefresh());
+    const interval = window.setInterval(() => {
+      if (canRefresh()) refreshRef.current();
+    }, 30_000);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", resume);
+    window.addEventListener("offline", resume);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", resume);
+      window.removeEventListener("offline", resume);
+    };
+  }, [available]);
+  return active;
+}
 
 /** Keep every private response and pending request scoped to the current account. */
 export function CreatorInbox(props: CreatorInboxProps) {
@@ -182,33 +158,75 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
   const available = accountAvailable && Boolean(accountKey);
   const [folder, setFolder] = useState<InboxFolder>("received");
   const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const messagesRef = useRef<ContactMessage[]>([]);
+  const readSnapshots = useRef(new Map<string, string>());
+  const [unreadCounts, setUnreadCounts] = useState<InboxResponse["unreadCounts"]>();
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [request, setRequest] = useState<{
+    cursor: string | null;
+    revision: number;
+    background: boolean;
+  }>({ cursor: null, revision: 0, background: false });
   const [selected, setSelected] = useState<string | null>(null);
-  const [revision, setRevision] = useState(0);
+  const [threadRefresh, setThreadRefresh] = useState(0);
   const [loading, setLoading] = useState(available);
+  const loadingRef = useRef(false);
+  const loadedOlder = useRef(false);
   const [error, setError] = useState("");
+  const [pageNotice, setPageNotice] = useState("");
   const folderId = useId();
   const foldersRef = useRef<HTMLDivElement>(null);
+  const active = useInboxRefresh(available, () => {
+    if (loadingRef.current) return;
+    setRequest((value) => ({ cursor: null, revision: value.revision + 1, background: true }));
+  });
 
   useEffect(() => {
-    if (!available) return;
+    if (!available || !active) {
+      setLoading(false);
+      return;
+    }
     let current = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
+    loadingRef.current = true;
     setLoading(true);
     setError("");
     const query = new URLSearchParams({ folder });
-    if (cursor) query.set("cursor", cursor);
+    if (request.cursor) query.set("cursor", request.cursor);
     inboxRequest(`/api/inbox?${query}`, controller.signal)
-      .then(parseInbox)
+      .then(parseInboxResponse)
       .then((value) => {
         if (!current) return;
-        setMessages((previous) => {
-          if (!cursor) return value.messages;
-          const seen = new Set(previous.map((row) => row.id));
-          return [...previous, ...value.messages.filter((row) => !seen.has(row.id))];
+        const counts = value.unreadCounts ? { ...value.unreadCounts } : undefined;
+        const incoming = value.messages.map((message) => {
+          // A slower list response may predate an already displayed, marked-read thread.
+          if (
+            inboxMessageUnread(message) &&
+            readSnapshots.current.get(message.id) === readSnapshot(message)
+          ) {
+            const bucket = unreadFolder(message);
+            if (counts) counts[bucket] = Math.max(0, counts[bucket] - 1);
+            return { ...message, unread: false };
+          }
+          return message;
         });
+        let rows = incoming;
+        if (request.cursor) {
+          const next = new Map(messagesRef.current.map((message) => [message.id, message]));
+          for (const message of incoming) next.set(message.id, message);
+          rows = sortInboxMessages([...next.values()]);
+          loadedOlder.current = true;
+        } else {
+          if (loadedOlder.current)
+            setPageNotice(
+              "Refreshed to the latest conversations. Load more messages to browse older conversations again.",
+            );
+          loadedOlder.current = false;
+        }
+        messagesRef.current = rows;
+        setMessages(rows);
+        setUnreadCounts(counts);
         setNextCursor(value.nextCursor);
       })
       .catch((cause: unknown) => {
@@ -218,6 +236,8 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
           (cause.status === 401 || cause.status === 403)
         ) {
           setMessages([]);
+          messagesRef.current = [];
+          setUnreadCounts(undefined);
           setNextCursor(null);
           setSelected(null);
         }
@@ -232,26 +252,49 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
       })
       .finally(() => {
         clearTimeout(timeout);
-        if (current) setLoading(false);
+        if (current) {
+          loadingRef.current = false;
+          setLoading(false);
+          // Load the selected conversation after the list to avoid stale unread badges.
+          setThreadRefresh((value) => value + 1);
+        }
       });
     return () => {
       current = false;
+      loadingRef.current = false;
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [available, folder, cursor, revision]);
+  }, [available, active, folder, request]);
 
   function changeFolder(value: InboxFolder) {
     if (folder === value) return;
     setFolder(value);
-    setCursor(null);
+    setRequest((value) => ({ cursor: null, revision: value.revision + 1, background: false }));
     setNextCursor(null);
     setMessages([]);
+    messagesRef.current = [];
+    loadedOlder.current = false;
+    setPageNotice("");
     setSelected(null);
   }
   function refresh() {
-    setCursor(null);
-    setRevision((value) => value + 1);
+    setRequest((value) => ({ cursor: null, revision: value.revision + 1, background: false }));
+  }
+  function updateRead(message: ContactMessage) {
+    const previous = messagesRef.current.find((row) => row.id === message.id);
+    if (!inboxMessageUnread(message)) readSnapshots.current.set(message.id, readSnapshot(message));
+    const rows = sortInboxMessages(
+      messagesRef.current.map((row) => (row.id === message.id ? message : row)),
+    );
+    messagesRef.current = rows;
+    setMessages(rows);
+    if (previous && inboxMessageUnread(previous) && !inboxMessageUnread(message)) {
+      const bucket = unreadFolder(message);
+      setUnreadCounts((counts) =>
+        counts ? { ...counts, [bucket]: Math.max(0, counts[bucket] - 1) } : counts,
+      );
+    }
   }
   if (!available)
     return (
@@ -275,8 +318,11 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
         <div>
           <h2>Private inbox</h2>
           <p>Messages and donation notes are visible only to their participants.</p>
+          <p className="creator-inbox-sync-note">
+            Refreshes every 30 seconds while this inbox is visible and online.
+          </p>
         </div>
-        <button type="button" onClick={refresh} disabled={loading}>
+        <button type="button" onClick={refresh} disabled={loading || !active}>
           <RefreshCw size={14} /> Refresh inbox
         </button>
       </div>
@@ -319,9 +365,21 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
             aria-controls={`${folderId}-panel`}
             tabIndex={folder === value ? 0 : -1}
             aria-selected={folder === value}
+            aria-label={label}
+            aria-describedby={unreadCounts?.[value] ? `${folderId}-${value}-unread` : undefined}
             onClick={() => changeFolder(value)}
           >
             {label}
+            {Boolean(unreadCounts?.[value]) && (
+              <>
+                <span className="creator-inbox-unread-count" aria-hidden="true">
+                  {unreadCounts![value]}
+                </span>
+                <span id={`${folderId}-${value}-unread`} className="creator-inbox-screen-reader">
+                  {unreadCounts![value]} unread conversations
+                </span>
+              </>
+            )}
           </button>
         ))}
       </div>
@@ -346,7 +404,12 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
               )}
             </div>
           )}
-          {loading && (
+          {pageNotice && (
+            <p className="creator-inbox-hint" role="status">
+              {pageNotice}
+            </p>
+          )}
+          {loading && (!request.background || messages.length === 0) && (
             <p className="creator-inbox-loading" role="status">
               <LoaderCircle size={16} className="creator-inbox-spin" /> Loading messages…
             </p>
@@ -375,19 +438,19 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
             >
               <span className="creator-inbox-row-top">
                 <strong>{senderLabel(message)}</strong>
-                {message.direction === "received" && !message.readAt && (
+                {inboxMessageUnread(message) && (
                   <span className="creator-inbox-unread">Unread</span>
                 )}
               </span>
-              <span className="creator-inbox-preview">
-                {message.text.replace(/\s+/gu, " ").slice(0, 170)}
-              </span>
+              <span className="creator-inbox-preview">{inboxMessagePreview(message)}</span>
               <span className="creator-inbox-row-bottom">
                 <span>
                   {message.kind === "donation" ? "Donation note" : "Direct message"} ·{" "}
                   {paymentLabel(message.paymentStatus)}
                 </span>
-                <time dateTime={message.createdAt}>{date(message.createdAt)}</time>
+                <time dateTime={inboxMessageActivity(message)}>
+                  {date(inboxMessageActivity(message))}
+                </time>
               </span>
               <ChevronRight size={14} className="creator-inbox-row-arrow" aria-hidden="true" />
             </button>
@@ -396,8 +459,14 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
             <button
               type="button"
               className="creator-inbox-more"
-              onClick={() => setCursor(nextCursor)}
-              disabled={loading}
+              onClick={() =>
+                setRequest((value) => ({
+                  cursor: nextCursor,
+                  revision: value.revision + 1,
+                  background: false,
+                }))
+              }
+              disabled={loading || !active}
             >
               Load more messages
             </button>
@@ -407,10 +476,10 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
           <Conversation
             key={selected}
             id={selected}
+            active={active}
+            refreshToken={threadRefresh}
             onBack={() => setSelected(null)}
-            onRead={(message) =>
-              setMessages((rows) => rows.map((row) => (row.id === message.id ? message : row)))
-            }
+            onRead={updateRead}
           />
         ) : (
           <div className="creator-inbox-no-selection">
@@ -425,23 +494,30 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
 
 function Conversation({
   id,
+  active,
+  refreshToken,
   onBack,
   onRead,
 }: {
   id: string;
+  active: boolean;
+  refreshToken: number;
   onBack: () => void;
   onRead: (message: ContactMessage) => void;
 }) {
   const [thread, setThread] = useState<ContactThread | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [paymentRequired, setPaymentRequired] = useState(false);
   const [resumePayment, setResumePayment] = useState(false);
   const alive = useRef(false);
+  const loaded = useRef(false);
   const pending = useRef<AbortController | null>(null);
   const onReadRef = useRef(onRead);
   onReadRef.current = onRead;
@@ -453,16 +529,23 @@ function Conversation({
     };
   }, []);
   useEffect(() => {
+    if (!active || busy) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     let current = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
-    setLoading(true);
-    setError("");
+    setLoading(!loaded.current);
+    setRefreshing(true);
+    setLoadError("");
     inboxRequest(`/api/inbox/${encodeURIComponent(id)}`, controller.signal)
-      .then(parseThread)
+      .then(parseInboxThread)
       .then((value) => {
         if (!current) return;
         if (value.message.id !== id) throw new Error("Unexpected conversation.");
+        loaded.current = true;
         setThread(value);
         onReadRef.current(value.message);
       })
@@ -471,10 +554,12 @@ function Conversation({
           current &&
           cause instanceof InboxError &&
           (cause.status === 401 || cause.status === 403 || cause.status === 404)
-        )
+        ) {
+          loaded.current = false;
           setThread(null);
+        }
         if (current)
-          setError(
+          setLoadError(
             controller.signal.aborted
               ? "The conversation took too long to load. Please try again."
               : cause instanceof Error
@@ -484,17 +569,20 @@ function Conversation({
       })
       .finally(() => {
         clearTimeout(timeout);
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
     return () => {
       current = false;
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [id, revision]);
+  }, [id, revision, refreshToken, active, busy]);
   async function reply(event: FormEvent) {
     event.preventDefault();
-    if (busy || !thread || loading) return;
+    if (busy || !thread || loading || !active) return;
     let text: string;
     try {
       text = validateContactText(draft);
@@ -545,14 +633,14 @@ function Conversation({
         <button
           type="button"
           onClick={() => setRevision((value) => value + 1)}
-          disabled={loading || busy}
+          disabled={refreshing || busy || !active}
         >
           <RefreshCw size={13} /> Refresh conversation
         </button>
       </div>
-      {error && (
+      {(error || loadError) && (
         <p className="creator-inbox-feedback" role="alert">
-          {error}
+          {error || loadError}
         </p>
       )}
       {notice && (
@@ -566,7 +654,7 @@ function Conversation({
         </p>
       )}
       {!loading && !thread && (
-        <button type="button" onClick={() => setRevision((value) => value + 1)}>
+        <button type="button" onClick={() => setRevision((value) => value + 1)} disabled={!active}>
           Try again
         </button>
       )}
@@ -668,7 +756,7 @@ function Conversation({
               </span>
               <button
                 type="submit"
-                disabled={busy || loading || !draft.trim() || [...draft].length > 2000}
+                disabled={busy || loading || !active || !draft.trim() || [...draft].length > 2000}
               >
                 <Send size={14} />
                 {busy ? "Sending…" : "Send reply"}
