@@ -26,6 +26,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Menu,
+  MessageSquare,
   Plus,
   RefreshCw,
   Search,
@@ -51,8 +52,9 @@ import { WalletPanel } from "./wallet-panel";
 import { AccountPanel } from "@/components/account-panel";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { AccountCreatorProfile } from "./account-creator-profile";
+import { CreatorInbox } from "./creator-inbox";
 
-type Tab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile";
+type Tab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile" | "Inbox";
 type Modal = "address" | "wallet" | "account" | "settings" | "edit" | null;
 const NAV = [
   { name: "Overview", icon: LayoutDashboard },
@@ -60,6 +62,7 @@ const NAV = [
   { name: "Wallets", icon: Wallet },
   { name: "Networks", icon: Globe2 },
   { name: "Profile", icon: UserRound },
+  { name: "Inbox", icon: MessageSquare },
 ] as const;
 const EXAMPLES = [
   {
@@ -465,7 +468,9 @@ export function Dashboard() {
                       ? "A home for your keys."
                       : tab === "Profile"
                         ? "Your corner of the internet."
-                        : "Explore the networks."}
+                        : tab === "Inbox"
+                          ? "Your creator inbox."
+                          : "Explore the networks."}
               </h1>
               <p>
                 {tab === "Overview"
@@ -476,7 +481,9 @@ export function Dashboard() {
                       ? "Create locally. Back up carefully. Stay in control."
                       : tab === "Profile"
                         ? "Your links, wishlist, and ways to support you, in one place."
-                        : "See what each network makes available before you add an address."}
+                        : tab === "Inbox"
+                          ? "Private messages and donation notes, together in one place."
+                          : "See what each network makes available before you add an address."}
               </p>
             </div>
             <div className="heading-actions">
@@ -1121,6 +1128,13 @@ export function Dashboard() {
           <div hidden={tab !== "Profile"}>
             <AccountCreatorProfile onOpenAccount={() => setModal("account")} />
           </div>
+          {tab === "Inbox" && (
+            <CreatorInbox
+              accountKey={user?.id ?? null}
+              accountAvailable={Boolean(user)}
+              onOpenAccount={() => setModal("account")}
+            />
+          )}
           <footer className="page-footer">
             <span>
               <span className="footer-brand">fathom</span> A clearer view of your on-chain world.

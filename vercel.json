@@ -44,6 +44,14 @@
     {
       "source": "/u/:handle/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/:handle((?!(?:[aA][cC][cC][oO][uU][nN][tT]|[aA][cC][cC][oO][uU][nN][tT][sS]|[aA][cC][tT][iI][vV][iI][tT][yY]|[aA][dD][mM][iI][nN]|[aA][pP][iI]|[aA][sS][sS][eE][tT][sS]|[aA][uU][tT][hH]|[dD][aA][sS][hH][bB][oO][aA][rR][dD]|[iI][nN][bB][oO][xX]|[lL][oO][gG][iI][nN]|[lL][oO][gG][oO][uU][tT]|[mM][eE][sS][sS][aA][gG][eE][sS]|[nN][eE][tT][wW][oO][rR][kK][sS]|[pP][rR][oO][fF][iI][lL][eE]|[pP][uU][bB][lL][iI][cC]|[sS][eE][tT][tT][iI][nN][gG][sS]|[sS][iI][gG][nN][iI][nN]|[sS][iI][gG][nN][uU][pP]|[sS][iI][tT][eE]|[sS][tT][aA][tT][iI][cC]|[sS][uU][pP][pP][oO][rR][tT]|[uU]|[wW][aA][lL][lL][eE][tT][sS])(?:/|$))[A-Za-z0-9][A-Za-z0-9_-]{1,30}[A-Za-z0-9])",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/:handle((?!(?:[aA][cC][cC][oO][uU][nN][tT]|[aA][cC][cC][oO][uU][nN][tT][sS]|[aA][cC][tT][iI][vV][iI][tT][yY]|[aA][dD][mM][iI][nN]|[aA][pP][iI]|[aA][sS][sS][eE][tT][sS]|[aA][uU][tT][hH]|[dD][aA][sS][hH][bB][oO][aA][rR][dD]|[iI][nN][bB][oO][xX]|[lL][oO][gG][iI][nN]|[lL][oO][gG][oO][uU][tT]|[mM][eE][sS][sS][aA][gG][eE][sS]|[nN][eE][tT][wW][oO][rR][kK][sS]|[pP][rR][oO][fF][iI][lL][eE]|[pP][uU][bB][lL][iI][cC]|[sS][eE][tT][tT][iI][nN][gG][sS]|[sS][iI][gG][nN][iI][nN]|[sS][iI][gG][nN][uU][pP]|[sS][iI][tT][eE]|[sS][tT][aA][tT][iI][cC]|[sS][uU][pP][pP][oO][rR][tT]|[uU]|[wW][aA][lL][lL][eE][tT][sS])(?:/|$))[A-Za-z0-9][A-Za-z0-9_-]{1,30}[A-Za-z0-9])/",
+      "destination": "/index.html"
     }
   ]
 }

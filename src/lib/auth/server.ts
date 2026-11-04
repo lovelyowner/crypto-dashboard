@@ -152,6 +152,11 @@ export const auth = betterAuth({
   ],
 });
 
+/** Server-only key material for encrypting creator-owned provider credentials. */
+export function getAuthEncryptionSecret(): string {
+  return secret;
+}
+
 export const SESSION_TOKEN_COOKIE = production
   ? "__Secure-fathom.session_token"
   : "fathom.session_token";

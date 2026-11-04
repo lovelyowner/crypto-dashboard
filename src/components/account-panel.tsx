@@ -19,6 +19,7 @@ import {
   type SessionDuration,
 } from "@/lib/auth/policy";
 import { AccountRecoveryReadiness, AccountSessions } from "./account-sessions";
+import { safeAccountReturnPath } from "@/lib/auth/return-to";
 import "./account.css";
 
 type Configuration = {
@@ -74,6 +75,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [newPassword, setNewPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
+  const [returnTo, setReturnTo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const user = session?.user;
   const twoFactorEnabled = Boolean(user?.twoFactorEnabled);
@@ -91,6 +93,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           );
       });
     const params = new URLSearchParams(window.location.search);
+    setReturnTo(safeAccountReturnPath(params.get("next")));
     const token = params.get("token");
     if (params.get("reset") && token) {
       setResetToken(token);
@@ -100,6 +103,10 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (user?.id && returnTo && mode !== "reset" && !challenge) window.location.assign(returnTo);
+  }, [user?.id, returnTo, mode, challenge]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -147,10 +154,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         return;
       }
       if (mode === "recover") {
-        await request("request-password-reset", {
-          email,
-          redirectTo: `${window.location.origin}/login?reset=1`,
-        });
+        const redirect = new URL("/login?reset=1", window.location.origin);
+        if (returnTo) redirect.searchParams.set("next", returnTo);
+        await request("request-password-reset", { email, redirectTo: redirect.href });
         setNotice("If an account exists for that email, a reset link has been sent.");
         return;
       }
@@ -210,11 +216,11 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       const result = linking
         ? await authClient.linkSocial({
             provider: provider as "google" | "discord" | "twitter",
-            callbackURL: "/login",
+            callbackURL: returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login",
           })
         : await authClient.signIn.social({
             provider: provider as "google" | "discord" | "twitter",
-            callbackURL: "/login",
+            callbackURL: returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login",
             fetchOptions: { headers: { [SESSION_DURATION_HEADER]: sessionDuration } },
           });
       if (result.error)
@@ -559,7 +565,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                 void run(async () => {
                   await request("send-verification-email", {
                     email: user.email,
-                    callbackURL: "/login",
+                    callbackURL: returnTo
+                      ? `/login?next=${encodeURIComponent(returnTo)}`
+                      : "/login",
                   });
                   setNotice("Check your email to verify ownership before linking accounts.");
                 })

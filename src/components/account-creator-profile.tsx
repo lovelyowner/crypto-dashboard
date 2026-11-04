@@ -1,5 +1,6 @@
 import { CreatorProfile } from "./creator-profile";
 import { ProfilePublication } from "./profile-publication";
+import { ProfileContactSettings } from "./profile-contact-settings";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { validateCreatorProfile, type CreatorProfileData } from "@/lib/creator-profile";
 
@@ -37,11 +38,17 @@ export function AccountCreatorProfile({ onOpenAccount }: { onOpenAccount: () => 
       )}
       <CreatorProfile
         renderPublication={(profile) => (
-          <ProfilePublication
-            profile={profile}
-            accountAvailable={Boolean(user)}
-            accountKey={user?.id ?? null}
-          />
+          <>
+            <ProfilePublication
+              profile={profile}
+              accountAvailable={Boolean(user)}
+              accountKey={user?.id ?? null}
+            />
+            <ProfileContactSettings
+              accountAvailable={Boolean(user)}
+              accountKey={user?.id ?? null}
+            />
+          </>
         )}
         accountAvailable={Boolean(user)}
         accountStatus={

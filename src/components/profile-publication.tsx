@@ -7,6 +7,7 @@ import {
   type ProfilePublication as Publication,
 } from "@/lib/public-profile";
 import { formatTransactionDate } from "@/lib/format";
+import { getPublicProfilePath, isReservedRootHandle } from "@/lib/profile-url";
 import "./profile-publication.css";
 
 export interface ProfilePublicationProps {
@@ -82,11 +83,17 @@ function PublicationControls({ profile, accountAvailable, accountKey }: ProfileP
     publication?.published && fingerprint === JSON.stringify(publication.profile),
   );
   const chosenHandle = publication?.handle ?? handle;
-  const url = chosenHandle ? `${origin}/u/${encodeURIComponent(chosenHandle)}` : "";
+  let profilePath = "";
+  try {
+    profilePath = getPublicProfilePath(chosenHandle);
+  } catch {
+    /* The ID is still being entered. */
+  }
+  const url = profilePath ? `${origin}${profilePath}` : "";
   let handleValid = false;
   try {
     normalizePublicHandle(chosenHandle);
-    handleValid = true;
+    handleValid = Boolean(publication) || !isReservedRootHandle(chosenHandle);
   } catch {
     /* Shown as field help until valid. */
   }
@@ -268,7 +275,9 @@ function PublicationControls({ profile, accountAvailable, accountKey }: ProfileP
         <div className="profile-publication-handle">
           <label htmlFor={handleId}>Public handle</label>
           <div className="profile-publication-handle-input">
-            <span aria-hidden="true">/u/</span>
+            <span aria-hidden="true">
+              {publication && isReservedRootHandle(publication.handle) ? "/u/" : "/"}
+            </span>
             <input
               id={handleId}
               value={chosenHandle}
@@ -289,8 +298,9 @@ function PublicationControls({ profile, accountAvailable, accountKey }: ProfileP
           </div>
           <small id={helpId}>
             3–32 lowercase letters, digits, underscores, or hyphens; start and end with a letter or
-            digit. Your handle stays with your account once published. Your sign-in username can
-            still use Unicode and symbols.
+            digit. This ID creates your shareable page at your-domain.com/your-id. App names such as
+            login and inbox are reserved. Your ID stays with your account once published; your
+            sign-in username can still use Unicode and symbols.
           </small>
         </div>
         {publication && (
@@ -389,6 +399,11 @@ function PublicationControls({ profile, accountAvailable, accountKey }: ProfileP
           </button>
         )}
       </div>
+      {!publication && isReservedRootHandle(chosenHandle) && (
+        <p className="profile-publication-hint">
+          This page ID is reserved for the app. Choose another ID.
+        </p>
+      )}
       {publication && !publication.published && (
         <p className="profile-publication-hint">
           Visitors see an unavailable page at this link until you republish. Unpublishing cannot

@@ -1,0 +1,216 @@
+.public-profile-contact {
+  min-width: 0;
+  margin-top: 24px;
+  padding: 21px;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
+}
+.public-profile-contact h2,
+.creator-payment-progress h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: var(--ui-text-3);
+  font-size: 14px;
+  font-weight: 550;
+}
+.public-profile-contact h3 {
+  color: var(--ui-text-3);
+  font-size: 12px;
+  margin: 0;
+}
+.public-profile-contact svg {
+  color: var(--ui-icon);
+  flex-shrink: 0;
+}
+.public-profile-contact button,
+.creator-payment-progress button,
+.creator-contact-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text-3);
+  background: var(--ui-background);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: none;
+}
+.public-profile-contact button:disabled,
+.creator-payment-progress button:disabled {
+  color: var(--ui-text-1);
+  cursor: default;
+}
+.public-profile-contact label,
+.creator-payment-progress label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 0 15px;
+  font-size: 11px;
+}
+.public-profile-contact input,
+.public-profile-contact textarea,
+.public-profile-contact select,
+.creator-payment-progress input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text-3);
+  background: var(--ui-background);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.public-profile-contact textarea {
+  resize: vertical;
+}
+.creator-contact-help {
+  margin: 12px 0 17px;
+  color: var(--ui-text-2);
+  font-size: 10px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.creator-contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.creator-contact-composer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 17px;
+}
+.creator-contact-composer-heading button {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: 10px;
+}
+.creator-contact-identity {
+  padding: 11px 13px;
+  margin-bottom: 17px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--ui-text-2);
+}
+.creator-contact-identity p {
+  margin: 0;
+  font-size: inherit;
+}
+.creator-contact-identity a {
+  color: var(--ui-text-3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.creator-contact-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  margin: 0 0 15px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+.creator-contact-feedback svg {
+  flex-shrink: 0;
+  color: var(--ui-icon);
+  margin-top: 3px;
+}
+.creator-payment-progress {
+  min-width: 0;
+}
+.creator-payment-progress > button,
+.creator-payment-progress > a {
+  margin: 0 8px 12px 0;
+}
+.creator-payment-amount {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 17px;
+  color: var(--ui-text-3);
+  margin: 0 0 19px;
+  overflow-wrap: anywhere;
+}
+.creator-payment-amount span {
+  font-size: 10px;
+  color: var(--ui-text-1);
+  line-height: 1.8;
+}
+.creator-payment-price {
+  font-size: 12px;
+  color: var(--ui-text-3);
+  margin: 0 0 15px;
+}
+.creator-payment-manual {
+  border-top: 1px solid var(--ui-border);
+  margin: 8px 0 18px;
+  padding-top: 15px;
+}
+.creator-payment-manual > summary {
+  font-size: 11px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+.creator-copy-field {
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+  min-width: 0;
+}
+.creator-copy-field > input {
+  flex: 1;
+  width: 0;
+}
+.creator-copy-field > button {
+  flex-shrink: 0;
+  padding: 8px;
+  min-width: 34px;
+}
+.creator-contact-spin {
+  animation: creator-contact-spin 1s linear infinite;
+}
+@keyframes creator-contact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 480px) {
+  .public-profile-contact {
+    padding: 18px 16px;
+  }
+  .creator-contact-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .creator-payment-amount {
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .creator-contact-spin {
+    animation: none;
+  }
+}

@@ -124,7 +124,7 @@ try {
     .getByRole("status")
     .filter({ hasText: "profile snapshot is published" })
     .waitFor();
-  const publicURL = `${origin}/u/${handle}`;
+  const publicURL = `${origin}/${handle}`;
   await check(
     "explicit consent publishes the current preview at a stable reserved URL",
     async () => {
@@ -186,6 +186,17 @@ try {
       assert.equal(await publicPage.title(), "Creator Мира 🌙 · Fathom");
     },
   );
+  await check("legacy /u links still resolve while new copied links use the root ID", async () => {
+    await publicPage.goto(`${origin}/u/${handle}`, { waitUntil: "domcontentloaded" });
+    await published.getByRole("heading", { name: "Creator Мира 🌙", exact: true }).waitFor();
+    assert.equal(
+      await publication.getByLabel("Public page link", { exact: true }).inputValue(),
+      publicURL,
+    );
+    await publicPage.goto(publicURL, { waitUntil: "domcontentloaded" });
+    await published.getByRole("heading", { name: "Creator Мира 🌙", exact: true }).waitFor();
+  });
+
   await check(
     "public visits do not query sessions, watchlist providers, or alter the visitor's local data",
     async () => {
@@ -195,7 +206,11 @@ try {
       assert.ok(apiPaths.length > 0);
       assert.ok(
         apiPaths.every(
-          (url) => url.origin === origin && url.pathname === `/api/public-profiles/${handle}`,
+          (url) =>
+            url.origin === origin &&
+            [`/api/public-profiles/${handle}`, `/api/creators/${handle}/contact`].includes(
+              url.pathname,
+            ),
         ),
       );
       assert.ok(visitorRequests.every((url) => new URL(url).origin === origin));

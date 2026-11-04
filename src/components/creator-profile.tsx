@@ -40,6 +40,8 @@ import {
   type ProfileLink,
   type WishlistItem,
 } from "@/lib/creator-profile";
+import { ProfileWalletPicker } from "./profile-wallet-picker";
+import { planProfileWalletSelection, type ProfileWalletOption } from "@/lib/profile-wallet-options";
 import "./creator-profile.css";
 
 const STORAGE_KEY = "fathom.creator-profile.v1";
@@ -529,6 +531,28 @@ export function CreatorProfile({
       ...p,
       wishlist: p.wishlist.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     }));
+  const addWorkspaceDonations = (selection: ProfileWalletOption[]): boolean => {
+    clearFeedback();
+    try {
+      const { fresh, skipped } = planProfileWalletSelection(draft.donations.crypto, selection);
+      if (!fresh.length) {
+        setNotice("These receiving addresses are already in your profile.");
+        return true;
+      }
+      const additions = fresh.map((entry) => ({ id: newId(), ...entry }));
+      edit((current) => ({
+        ...current,
+        donations: { ...current.donations, crypto: [...current.donations.crypto, ...additions] },
+      }));
+      setNotice(
+        `${additions.length} public receiving address${additions.length === 1 ? "" : "es"} added to your draft.${skipped ? ` ${skipped} duplicate${skipped === 1 ? " was" : "s were"} skipped.` : ""} Save or publish when ready.`,
+      );
+      return true;
+    } catch (cause) {
+      setError(messageFrom(cause));
+      return false;
+    }
+  };
   const updateDonation = (id: string, patch: Partial<DonationAddress>) =>
     edit((p) => ({
       ...p,
@@ -857,6 +881,10 @@ export function CreatorProfile({
                   Add public receiving addresses only. Never enter seed phrases, private keys,
                   exchange passwords, or wallet recovery data.
                 </p>
+                <ProfileWalletPicker
+                  existing={draft.donations.crypto}
+                  onAdd={addWorkspaceDonations}
+                />
                 {draft.donations.crypto.map((donation, index) => (
                   <div className="creator-item" key={donation.id}>
                     <div className="creator-item-heading">

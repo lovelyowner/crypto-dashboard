@@ -10,6 +10,7 @@ import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { chromium } from "playwright";
+import { ROOT_PROFILE_ROUTE_SOURCE, publicHandleFromPath } from "../src/lib/profile-url.ts";
 
 const filename = fileURLToPath(import.meta.url);
 const project = resolve(dirname(filename), "..");
@@ -33,7 +34,8 @@ async function serveHostedBuild() {
       // Mirrors the repository's explicit SPA entry and login rewrites. Do not
       // turn missing JS/assets or API failures into successful index responses.
       const pathname =
-        ["/", "/login", "/login/"].includes(url.pathname) || /^\/u\/[^/]+\/?$/.test(url.pathname)
+        ["/", "/login", "/login/"].includes(url.pathname) ||
+        publicHandleFromPath(url.pathname) !== null
           ? "/index.html"
           : decodeURIComponent(url.pathname);
       const path = resolve(directory, `.${pathname}`);
@@ -131,6 +133,12 @@ async function runChecks() {
       (rule) => rule.source === "/u/:handle" && rule.destination === "/index.html",
     ),
     "Vercel must serve the public creator page entry on /u/:handle",
+  );
+  assert.ok(
+    config.rewrites?.some(
+      (rule) => rule.source === ROOT_PROFILE_ROUTE_SOURCE && rule.destination === "/index.html",
+    ),
+    "Vercel must serve canonical creator IDs without shadowing app or asset paths",
   );
   const { child, baseURL } = await startHostedServer();
   let browser;
@@ -268,13 +276,13 @@ async function runChecks() {
         const localDraft = await page.evaluate(() =>
           localStorage.getItem("fathom.creator-profile.v1"),
         );
-        for (const suffix of ["", "/"]) {
+        for (const pathname of ["/hosted-creator", "/hosted-creator/", "/u/hosted-creator"]) {
           const [profileResponse] = await Promise.all([
             publicPage.waitForResponse(
               (response) =>
                 new URL(response.url()).pathname === "/api/public-profiles/hosted-creator",
             ),
-            publicPage.goto(`${baseURL}/u/hosted-creator${suffix}`, {
+            publicPage.goto(`${baseURL}${pathname}`, {
               waitUntil: "domcontentloaded",
             }),
           ]);
@@ -293,7 +301,14 @@ async function runChecks() {
           );
         }
         assert.ok(requests.length > 0);
-        assert.ok(requests.every((path) => path === "/api/public-profiles/hosted-creator"));
+        assert.ok(
+          requests.every((path) =>
+            [
+              "/api/public-profiles/hosted-creator",
+              "/api/creators/hosted-creator/contact",
+            ].includes(path),
+          ),
+        );
         await publicPage.close();
       },
     );

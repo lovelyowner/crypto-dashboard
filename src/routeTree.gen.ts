@@ -10,21 +10,48 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as HandleRouteImport } from './routes/$handle'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiInboxRouteImport } from './routes/api/inbox'
+import { Route as ApiPaymentsRouteImport } from './routes/api/payments'
 import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiInboxIdRouteImport } from './routes/api/inbox/$id'
+import { Route as ApiPaymentsIdRouteImport } from './routes/api/payments/$id'
+import { Route as ApiProfileContactRouteImport } from './routes/api/profile.contact'
+import { Route as ApiProfilePaymentsRouteImport } from './routes/api/profile.payments'
 import { Route as ApiProfilePublicationRouteImport } from './routes/api/profile.publication'
 import { Route as ApiPublicProfilesHandleRouteImport } from './routes/api/public-profiles/$handle'
+import { Route as ApiCreatorsHandleContactRouteImport } from './routes/api/creators/$handle.contact'
+import { Route as ApiCreatorsHandleMessagesRouteImport } from './routes/api/creators/$handle.messages'
+import { Route as ApiInboxIdRepliesRouteImport } from './routes/api/inbox/$id.replies'
+import { Route as ApiPaymentsIdVerifyRouteImport } from './routes/api/payments/$id.verify'
+import { Route as ApiPaymentsNowpaymentsWebhookCredentialIdRouteImport } from './routes/api/payments/nowpayments.webhook.$credentialId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HandleRoute = HandleRouteImport.update({
+  id: '/$handle',
+  path: '/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiInboxRoute = ApiInboxRouteImport.update({
+  id: '/api/inbox',
+  path: '/api/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPaymentsRoute = ApiPaymentsRouteImport.update({
+  id: '/api/payments',
+  path: '/api/payments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiProfileRoute = ApiProfileRouteImport.update({
@@ -42,6 +69,26 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiInboxIdRoute = ApiInboxIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiInboxRoute,
+} as any)
+const ApiPaymentsIdRoute = ApiPaymentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiPaymentsRoute,
+} as any)
+const ApiProfileContactRoute = ApiProfileContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => ApiProfileRoute,
+} as any)
+const ApiProfilePaymentsRoute = ApiProfilePaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => ApiProfileRoute,
+} as any)
 const ApiProfilePublicationRoute = ApiProfilePublicationRouteImport.update({
   id: '/publication',
   path: '/publication',
@@ -52,72 +99,177 @@ const ApiPublicProfilesHandleRoute = ApiPublicProfilesHandleRouteImport.update({
   path: '/api/public-profiles/$handle',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCreatorsHandleContactRoute =
+  ApiCreatorsHandleContactRouteImport.update({
+    id: '/api/creators/$handle/contact',
+    path: '/api/creators/$handle/contact',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCreatorsHandleMessagesRoute =
+  ApiCreatorsHandleMessagesRouteImport.update({
+    id: '/api/creators/$handle/messages',
+    path: '/api/creators/$handle/messages',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiInboxIdRepliesRoute = ApiInboxIdRepliesRouteImport.update({
+  id: '/replies',
+  path: '/replies',
+  getParentRoute: () => ApiInboxIdRoute,
+} as any)
+const ApiPaymentsIdVerifyRoute = ApiPaymentsIdVerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => ApiPaymentsIdRoute,
+} as any)
+const ApiPaymentsNowpaymentsWebhookCredentialIdRoute =
+  ApiPaymentsNowpaymentsWebhookCredentialIdRouteImport.update({
+    id: '/nowpayments/webhook/$credentialId',
+    path: '/nowpayments/webhook/$credentialId',
+    getParentRoute: () => ApiPaymentsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$handle': typeof HandleRoute
   '/login': typeof LoginRoute
+  '/api/inbox': typeof ApiInboxRouteWithChildren
+  '/api/payments': typeof ApiPaymentsRouteWithChildren
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
+  '/api/payments/$id': typeof ApiPaymentsIdRouteWithChildren
+  '/api/profile/contact': typeof ApiProfileContactRoute
+  '/api/profile/payments': typeof ApiProfilePaymentsRoute
   '/api/profile/publication': typeof ApiProfilePublicationRoute
   '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
+  '/api/creators/$handle/contact': typeof ApiCreatorsHandleContactRoute
+  '/api/creators/$handle/messages': typeof ApiCreatorsHandleMessagesRoute
+  '/api/inbox/$id/replies': typeof ApiInboxIdRepliesRoute
+  '/api/payments/$id/verify': typeof ApiPaymentsIdVerifyRoute
+  '/api/payments/nowpayments/webhook/$credentialId': typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$handle': typeof HandleRoute
   '/login': typeof LoginRoute
+  '/api/inbox': typeof ApiInboxRouteWithChildren
+  '/api/payments': typeof ApiPaymentsRouteWithChildren
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
+  '/api/payments/$id': typeof ApiPaymentsIdRouteWithChildren
+  '/api/profile/contact': typeof ApiProfileContactRoute
+  '/api/profile/payments': typeof ApiProfilePaymentsRoute
   '/api/profile/publication': typeof ApiProfilePublicationRoute
   '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
+  '/api/creators/$handle/contact': typeof ApiCreatorsHandleContactRoute
+  '/api/creators/$handle/messages': typeof ApiCreatorsHandleMessagesRoute
+  '/api/inbox/$id/replies': typeof ApiInboxIdRepliesRoute
+  '/api/payments/$id/verify': typeof ApiPaymentsIdVerifyRoute
+  '/api/payments/nowpayments/webhook/$credentialId': typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$handle': typeof HandleRoute
   '/login': typeof LoginRoute
+  '/api/inbox': typeof ApiInboxRouteWithChildren
+  '/api/payments': typeof ApiPaymentsRouteWithChildren
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
+  '/api/payments/$id': typeof ApiPaymentsIdRouteWithChildren
+  '/api/profile/contact': typeof ApiProfileContactRoute
+  '/api/profile/payments': typeof ApiProfilePaymentsRoute
   '/api/profile/publication': typeof ApiProfilePublicationRoute
   '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
+  '/api/creators/$handle/contact': typeof ApiCreatorsHandleContactRoute
+  '/api/creators/$handle/messages': typeof ApiCreatorsHandleMessagesRoute
+  '/api/inbox/$id/replies': typeof ApiInboxIdRepliesRoute
+  '/api/payments/$id/verify': typeof ApiPaymentsIdVerifyRoute
+  '/api/payments/nowpayments/webhook/$credentialId': typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$handle'
     | '/login'
+    | '/api/inbox'
+    | '/api/payments'
     | '/api/profile'
     | '/u/$handle'
     | '/api/auth/$'
+    | '/api/inbox/$id'
+    | '/api/payments/$id'
+    | '/api/profile/contact'
+    | '/api/profile/payments'
     | '/api/profile/publication'
     | '/api/public-profiles/$handle'
+    | '/api/creators/$handle/contact'
+    | '/api/creators/$handle/messages'
+    | '/api/inbox/$id/replies'
+    | '/api/payments/$id/verify'
+    | '/api/payments/nowpayments/webhook/$credentialId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$handle'
     | '/login'
+    | '/api/inbox'
+    | '/api/payments'
     | '/api/profile'
     | '/u/$handle'
     | '/api/auth/$'
+    | '/api/inbox/$id'
+    | '/api/payments/$id'
+    | '/api/profile/contact'
+    | '/api/profile/payments'
     | '/api/profile/publication'
     | '/api/public-profiles/$handle'
+    | '/api/creators/$handle/contact'
+    | '/api/creators/$handle/messages'
+    | '/api/inbox/$id/replies'
+    | '/api/payments/$id/verify'
+    | '/api/payments/nowpayments/webhook/$credentialId'
   id:
     | '__root__'
     | '/'
+    | '/$handle'
     | '/login'
+    | '/api/inbox'
+    | '/api/payments'
     | '/api/profile'
     | '/u/$handle'
     | '/api/auth/$'
+    | '/api/inbox/$id'
+    | '/api/payments/$id'
+    | '/api/profile/contact'
+    | '/api/profile/payments'
     | '/api/profile/publication'
     | '/api/public-profiles/$handle'
+    | '/api/creators/$handle/contact'
+    | '/api/creators/$handle/messages'
+    | '/api/inbox/$id/replies'
+    | '/api/payments/$id/verify'
+    | '/api/payments/nowpayments/webhook/$credentialId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HandleRoute: typeof HandleRoute
   LoginRoute: typeof LoginRoute
+  ApiInboxRoute: typeof ApiInboxRouteWithChildren
+  ApiPaymentsRoute: typeof ApiPaymentsRouteWithChildren
   ApiProfileRoute: typeof ApiProfileRouteWithChildren
   UHandleRoute: typeof UHandleRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiPublicProfilesHandleRoute: typeof ApiPublicProfilesHandleRoute
+  ApiCreatorsHandleContactRoute: typeof ApiCreatorsHandleContactRoute
+  ApiCreatorsHandleMessagesRoute: typeof ApiCreatorsHandleMessagesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -129,11 +281,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$handle': {
+      id: '/$handle'
+      path: '/$handle'
+      fullPath: '/$handle'
+      preLoaderRoute: typeof HandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/inbox': {
+      id: '/api/inbox'
+      path: '/api/inbox'
+      fullPath: '/api/inbox'
+      preLoaderRoute: typeof ApiInboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/payments': {
+      id: '/api/payments'
+      path: '/api/payments'
+      fullPath: '/api/payments'
+      preLoaderRoute: typeof ApiPaymentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/profile': {
@@ -157,6 +330,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/inbox/$id': {
+      id: '/api/inbox/$id'
+      path: '/$id'
+      fullPath: '/api/inbox/$id'
+      preLoaderRoute: typeof ApiInboxIdRouteImport
+      parentRoute: typeof ApiInboxRoute
+    }
+    '/api/payments/$id': {
+      id: '/api/payments/$id'
+      path: '/$id'
+      fullPath: '/api/payments/$id'
+      preLoaderRoute: typeof ApiPaymentsIdRouteImport
+      parentRoute: typeof ApiPaymentsRoute
+    }
+    '/api/profile/contact': {
+      id: '/api/profile/contact'
+      path: '/contact'
+      fullPath: '/api/profile/contact'
+      preLoaderRoute: typeof ApiProfileContactRouteImport
+      parentRoute: typeof ApiProfileRoute
+    }
+    '/api/profile/payments': {
+      id: '/api/profile/payments'
+      path: '/payments'
+      fullPath: '/api/profile/payments'
+      preLoaderRoute: typeof ApiProfilePaymentsRouteImport
+      parentRoute: typeof ApiProfileRoute
+    }
     '/api/profile/publication': {
       id: '/api/profile/publication'
       path: '/publication'
@@ -171,14 +372,104 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicProfilesHandleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/creators/$handle/contact': {
+      id: '/api/creators/$handle/contact'
+      path: '/api/creators/$handle/contact'
+      fullPath: '/api/creators/$handle/contact'
+      preLoaderRoute: typeof ApiCreatorsHandleContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/creators/$handle/messages': {
+      id: '/api/creators/$handle/messages'
+      path: '/api/creators/$handle/messages'
+      fullPath: '/api/creators/$handle/messages'
+      preLoaderRoute: typeof ApiCreatorsHandleMessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/inbox/$id/replies': {
+      id: '/api/inbox/$id/replies'
+      path: '/replies'
+      fullPath: '/api/inbox/$id/replies'
+      preLoaderRoute: typeof ApiInboxIdRepliesRouteImport
+      parentRoute: typeof ApiInboxIdRoute
+    }
+    '/api/payments/$id/verify': {
+      id: '/api/payments/$id/verify'
+      path: '/verify'
+      fullPath: '/api/payments/$id/verify'
+      preLoaderRoute: typeof ApiPaymentsIdVerifyRouteImport
+      parentRoute: typeof ApiPaymentsIdRoute
+    }
+    '/api/payments/nowpayments/webhook/$credentialId': {
+      id: '/api/payments/nowpayments/webhook/$credentialId'
+      path: '/nowpayments/webhook/$credentialId'
+      fullPath: '/api/payments/nowpayments/webhook/$credentialId'
+      preLoaderRoute: typeof ApiPaymentsNowpaymentsWebhookCredentialIdRouteImport
+      parentRoute: typeof ApiPaymentsRoute
+    }
   }
 }
 
+interface ApiInboxIdRouteChildren {
+  ApiInboxIdRepliesRoute: typeof ApiInboxIdRepliesRoute
+}
+
+const ApiInboxIdRouteChildren: ApiInboxIdRouteChildren = {
+  ApiInboxIdRepliesRoute: ApiInboxIdRepliesRoute,
+}
+
+const ApiInboxIdRouteWithChildren = ApiInboxIdRoute._addFileChildren(
+  ApiInboxIdRouteChildren,
+)
+
+interface ApiInboxRouteChildren {
+  ApiInboxIdRoute: typeof ApiInboxIdRouteWithChildren
+}
+
+const ApiInboxRouteChildren: ApiInboxRouteChildren = {
+  ApiInboxIdRoute: ApiInboxIdRouteWithChildren,
+}
+
+const ApiInboxRouteWithChildren = ApiInboxRoute._addFileChildren(
+  ApiInboxRouteChildren,
+)
+
+interface ApiPaymentsIdRouteChildren {
+  ApiPaymentsIdVerifyRoute: typeof ApiPaymentsIdVerifyRoute
+}
+
+const ApiPaymentsIdRouteChildren: ApiPaymentsIdRouteChildren = {
+  ApiPaymentsIdVerifyRoute: ApiPaymentsIdVerifyRoute,
+}
+
+const ApiPaymentsIdRouteWithChildren = ApiPaymentsIdRoute._addFileChildren(
+  ApiPaymentsIdRouteChildren,
+)
+
+interface ApiPaymentsRouteChildren {
+  ApiPaymentsIdRoute: typeof ApiPaymentsIdRouteWithChildren
+  ApiPaymentsNowpaymentsWebhookCredentialIdRoute: typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
+}
+
+const ApiPaymentsRouteChildren: ApiPaymentsRouteChildren = {
+  ApiPaymentsIdRoute: ApiPaymentsIdRouteWithChildren,
+  ApiPaymentsNowpaymentsWebhookCredentialIdRoute:
+    ApiPaymentsNowpaymentsWebhookCredentialIdRoute,
+}
+
+const ApiPaymentsRouteWithChildren = ApiPaymentsRoute._addFileChildren(
+  ApiPaymentsRouteChildren,
+)
+
 interface ApiProfileRouteChildren {
+  ApiProfileContactRoute: typeof ApiProfileContactRoute
+  ApiProfilePaymentsRoute: typeof ApiProfilePaymentsRoute
   ApiProfilePublicationRoute: typeof ApiProfilePublicationRoute
 }
 
 const ApiProfileRouteChildren: ApiProfileRouteChildren = {
+  ApiProfileContactRoute: ApiProfileContactRoute,
+  ApiProfilePaymentsRoute: ApiProfilePaymentsRoute,
   ApiProfilePublicationRoute: ApiProfilePublicationRoute,
 }
 
@@ -188,11 +479,16 @@ const ApiProfileRouteWithChildren = ApiProfileRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HandleRoute: HandleRoute,
   LoginRoute: LoginRoute,
+  ApiInboxRoute: ApiInboxRouteWithChildren,
+  ApiPaymentsRoute: ApiPaymentsRouteWithChildren,
   ApiProfileRoute: ApiProfileRouteWithChildren,
   UHandleRoute: UHandleRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiPublicProfilesHandleRoute: ApiPublicProfilesHandleRoute,
+  ApiCreatorsHandleContactRoute: ApiCreatorsHandleContactRoute,
+  ApiCreatorsHandleMessagesRoute: ApiCreatorsHandleMessagesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

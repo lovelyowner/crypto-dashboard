@@ -7,6 +7,7 @@ import {
 } from "@/lib/public-profile";
 import { formatTransactionDate } from "@/lib/format";
 import { PublicProfile } from "./creator-profile";
+import { PublicProfileContact } from "./public-profile-contact";
 import "./public-creator-page.css";
 
 type PageState =
@@ -135,6 +136,7 @@ export function PublicCreatorPage({ handle }: { handle: string }) {
               published
               onCopy={(value, label) => void copy(value, label)}
             />
+            <PublicProfileContact handle={state.publication.handle} />
             <footer className="public-creator-footer">
               <p>
                 This page contains information provided by its creator. Links and receiving

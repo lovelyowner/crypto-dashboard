@@ -1,0 +1,102 @@
+.profile-wallet-picker {
+  margin: 0 0 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  padding: 13px;
+  color: var(--ui-text-2);
+  background: var(--ui-background);
+  min-width: 0;
+}
+.profile-wallet-picker > summary {
+  cursor: pointer;
+  color: var(--ui-text-3);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.profile-wallet-picker > summary svg {
+  display: inline;
+  vertical-align: middle;
+  margin-right: 5px;
+  color: var(--ui-icon);
+}
+.profile-wallet-picker p {
+  font-size: 10px;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+.profile-wallet-options {
+  display: grid;
+  gap: 9px;
+  max-height: 310px;
+  overflow-y: auto;
+  margin: 14px 0;
+}
+.profile-wallet-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  padding: 11px;
+  min-width: 0;
+  cursor: pointer;
+}
+.profile-wallet-option > input,
+.profile-wallet-confirm > input {
+  flex-shrink: 0;
+  margin: 3px 0 0;
+  accent-color: var(--ui-text-2);
+}
+.profile-wallet-option > span {
+  display: block;
+  min-width: 0;
+}
+.profile-wallet-option strong {
+  display: block;
+  color: var(--ui-text-3);
+  font-size: 11px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.profile-wallet-option small {
+  display: block;
+  color: var(--ui-text-1);
+  font-size: 9px;
+  margin-top: 5px;
+  line-height: 1.8;
+}
+.profile-wallet-option code {
+  display: block;
+  color: var(--ui-text-2);
+  font-size: 9px;
+  line-height: 1.8;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.profile-wallet-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: var(--ui-text-2);
+}
+.profile-wallet-picker .profile-wallet-capacity {
+  color: var(--ui-text-1);
+}
+.profile-wallet-picker .profile-wallet-privacy {
+  margin-bottom: 0;
+}
+.profile-wallet-picker > summary:focus-visible {
+  outline: 2px solid var(--ui-border);
+  outline-offset: 4px;
+}
+@media (max-width: 420px) {
+  .profile-wallet-picker {
+    padding: 11px;
+  }
+  .profile-wallet-option {
+    padding: 10px;
+  }
+}

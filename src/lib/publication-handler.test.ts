@@ -380,3 +380,29 @@ test("public records are revalidated and neither endpoint accepts unsupported mu
   );
   assert.deepEqual(app.calls, []);
 });
+
+test("new creator IDs cannot shadow app routes while existing reserved handles remain editable", async () => {
+  const blocked = fixture();
+  await expectStatus(
+    await blocked.handlePublicationRequest(request("PUT", { handle: "LOGIN", profile })),
+    400,
+  );
+  assert.equal(
+    blocked.calls.some((call) => call.method === "publish"),
+    false,
+  );
+  const legacy = { ...existing, handle: "login" };
+  const app = fixture({
+    store: {
+      read: async () => legacy,
+      readPublic: async () => legacy,
+      publish: async (_userId, handle, value) => ({ ...legacy, handle, profile: value }),
+      unpublish: async () => ({ ...legacy, published: false }),
+    },
+  });
+  const result = await expectStatus(
+    await app.handlePublicationRequest(request("PUT", { handle: "login", profile })),
+    200,
+  );
+  assert.equal(result.publication.handle, "login");
+});

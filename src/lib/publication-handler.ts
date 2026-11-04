@@ -1,4 +1,5 @@
 import type { CreatorProfile } from "./creator-profile";
+import { isReservedRootHandle } from "./profile-url";
 import type { ProfileSession } from "./profile-handler";
 import {
   PublicationConflictError,
@@ -167,6 +168,14 @@ export function createPublicationHandlers(dependencies: PublicationHandlerDepend
         record = await dependencies.store.unpublish(session.user.id);
       else {
         const body = await publishBody(request);
+        if (
+          isReservedRootHandle(body.handle) &&
+          (await dependencies.store.read(session.user.id))?.handle !== body.handle
+        )
+          throw new RequestError(
+            400,
+            "This ID is reserved for an application page. Choose another public ID.",
+          );
         record = await dependencies.store.publish(session.user.id, body.handle, body.profile);
       }
       return reply(publicationResponse(record));

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { isChainId, type ChainId } from "./chains";
 
-export type WorkspaceTab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile";
+export type WorkspaceTab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile" | "Inbox";
 export type AddressSort = "recent" | "label" | "balance";
 export type TransactionDirection = "all" | "in" | "out" | "self";
 export type TransactionStatus = "all" | "ok" | "pending" | "failed";
@@ -24,7 +24,7 @@ export const DEFAULT_WORKSPACE_VIEW: Readonly<WorkspaceView> = Object.freeze({
   status: "all",
   range: "all",
 });
-const tabs: readonly string[] = ["Overview", "Activity", "Wallets", "Networks", "Profile"];
+const tabs: readonly string[] = ["Overview", "Activity", "Wallets", "Networks", "Profile", "Inbox"];
 const sorts: readonly string[] = ["recent", "label", "balance"];
 const directions: readonly string[] = ["all", "in", "out", "self"];
 const statuses: readonly string[] = ["all", "ok", "pending", "failed"];
