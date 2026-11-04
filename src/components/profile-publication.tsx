@@ -14,6 +14,7 @@ export interface ProfilePublicationProps {
   profile: CreatorProfileData | null;
   accountAvailable: boolean;
   accountKey: string | null;
+  onPublicationChange?: () => void;
 }
 
 async function publicationRequest(
@@ -60,7 +61,12 @@ export function ProfilePublication(props: ProfilePublicationProps) {
   return <PublicationControls key={props.accountKey ?? "guest"} {...props} />;
 }
 
-function PublicationControls({ profile, accountAvailable, accountKey }: ProfilePublicationProps) {
+function PublicationControls({
+  profile,
+  accountAvailable,
+  accountKey,
+  onPublicationChange,
+}: ProfilePublicationProps) {
   const available = accountAvailable && Boolean(accountKey);
   const [publication, setPublication] = useState<Publication | null>(null);
   const [handle, setHandle] = useState("");
@@ -200,6 +206,7 @@ function PublicationControls({ profile, accountAvailable, accountKey }: ProfileP
       setPublication(value);
       setHandle(value.handle);
       setConsentedProfile(null);
+      onPublicationChange?.();
       setNotice(
         action === "publish"
           ? "This profile snapshot is published at your stable link. Further edits stay private until you publish an update."

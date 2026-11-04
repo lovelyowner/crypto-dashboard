@@ -55,6 +55,7 @@ npm run test:profile  # checks private account draft ownership over real HTTP
 npm run test:publication # verifies explicit publishing and handle ownership
 npm run test:sessions # verifies actual session revocation and account isolation
 npm run test:contact # verifies inbox privacy and message payment gates
+npm run test:creator-setup # verifies publication refresh, unsaved fees, and checkout controls
 npm run test:e2e      # running server + Playwright Chromium; includes disposable account UI checks
 npm run build:vercel
 npm run test:hosted   # isolated production smoke; uses the built site and actual API entry
@@ -81,7 +82,7 @@ Install the browser for UI tests with `npx playwright install chromium`. Browser
 
 Open **Profile** in the sidebar. Create a Unicode display name and bio, up to 20 ordered links, and up to 20 wishlist items with exact optional prices and currency codes. Optional personal links open AllMyLinks, Throne, NOWPayments, or Bluesky. These service links are not account verification or provider integrations.
 
-Support options include a hosted bank/payment checkout link and up to 10 validated public crypto addresses with network labels, copy buttons, and explorer links. The app does not collect bank account numbers, create payment invoices, process payments, guarantee wishlist fulfillment, or custody donated funds. Merchants and payment providers handle their own checkout and regional eligibility.
+Support options include a hosted bank/payment checkout link and up to 10 validated public crypto addresses with network labels, copy buttons, and explorer links. Verified message payments support direct Ethereum transfers and creator-owned NOWPayments invoices as described in [Messages and payments](docs/messages-and-payments.md). The app does not collect bank account numbers, guarantee wishlist fulfillment, or custody donated funds. Merchants and payment providers handle their own checkout and regional eligibility.
 
 The Donations editor can copy selected public receiving addresses from saved local wallets and watchlists; this never transfers wallet secrets. **Save local draft** explicitly saves to this browser. **Export profile** creates a public-data-only backup; import validates every field before replacing the editor. Switching dashboard tabs preserves unsaved edits. **Save to account** / **Load from account** explicitly write/read a private draft under the signed-in account; they never publish it.
 

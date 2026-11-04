@@ -334,3 +334,124 @@ test("creator-owned NOWPayments credentials stay encrypted; signed IPN alone nev
     await f.pg.close();
   }
 });
+
+test("disabling new hosted checkouts is owner scoped and preserves existing invoice settlement", async () => {
+  const f = await setup();
+  try {
+    const keys = {
+      apiKey: "disable-fixture-api-key",
+      ipnSecret: "disable-fixture-IPN-secret-long-enough",
+    };
+    const saved = await f.request("/api/profile/payments", {
+      method: "PUT",
+      user: "owner",
+      body: keys,
+    });
+    assert.equal(saved.response.status, 200);
+    const credential = (await f.store.credential("owner"))!;
+    const prepared = await f.request("/api/payments", {
+      method: "POST",
+      user: "sender",
+      body: f.input({ method: "nowpayments" }),
+    });
+    assert.equal(prepared.response.status, 201);
+    const id = prepared.data.payment.id;
+    assert.equal((await f.store.read(id))!.credentialId, credential.id);
+    const unrelated = await f.pending("other");
+
+    const otherKeys = {
+      apiKey: "other-fixture-api-key",
+      ipnSecret: "other-fixture-IPN-secret-long-enough",
+    };
+    await f.request("/api/profile/payments", {
+      method: "PUT",
+      user: "other",
+      body: otherKeys,
+    });
+    const otherDisabled = await f.request("/api/profile/payments", {
+      method: "DELETE",
+      user: "other",
+    });
+    assert.equal(otherDisabled.response.status, 200);
+    assert.equal(otherDisabled.data.nowpayments.configured, false);
+    assert.equal((await f.store.credential("owner"))!.id, credential.id);
+    await f.request("/api/profile/payments", {
+      method: "PUT",
+      user: "other",
+      body: otherKeys,
+    });
+    const otherCredential = (await f.store.credential("other"))!;
+
+    for (const [options, expectedStatus] of [
+      [{}, 401],
+      [{ user: "owner", headers: { "x-stale": "1" } }, 403],
+      [{ user: "owner", headers: { origin: "https://evil.example" } }, 403],
+      [{ user: "owner", headers: { "sec-fetch-site": "cross-site" } }, 403],
+    ] as const) {
+      const rejected = await f.request("/api/profile/payments", {
+        method: "DELETE",
+        ...options,
+      });
+      assert.equal(rejected.response.status, expectedStatus);
+      assert.equal((await f.store.credential("owner"))!.id, credential.id);
+    }
+
+    const disabled = await f.request("/api/profile/payments", {
+      method: "DELETE",
+      user: "owner",
+    });
+    assert.equal(disabled.response.status, 200);
+    assert.deepEqual(disabled.data.nowpayments, { configured: false, webhookUrl: null });
+    assert.equal(JSON.stringify(disabled.data).includes(keys.apiKey), false);
+    assert.equal(JSON.stringify(disabled.data).includes(keys.ipnSecret), false);
+    assert.equal(await f.store.credential("owner"), null);
+    const retained = (await f.store.credentialById(credential.id))!;
+    assert.equal(retained.active, false);
+    assert.equal(retained.encrypted, credential.encrypted);
+    assert.equal((await f.store.credential("other"))!.id, otherCredential.id);
+    assert.equal((await f.store.read(id))!.status, "pending");
+    assert.equal((await f.contacts.listMessages("owner", "received", null)).messages.length, 0);
+
+    const newCheckout = await f.request("/api/payments", {
+      method: "POST",
+      user: "sender",
+      body: f.input({ method: "nowpayments" }),
+    });
+    assert.equal(newCheckout.response.status, 503);
+    assert.equal(f.providerCalls(), 0);
+
+    const notification = {
+      payment_id: 10,
+      order_id: id,
+      price_amount: 5,
+      price_currency: "usd",
+      payment_status: "finished",
+    };
+    const signature = createHmac("sha512", keys.ipnSecret)
+      .update(
+        JSON.stringify(
+          Object.fromEntries(
+            Object.keys(notification)
+              .sort()
+              .map((key) => [key, notification[key as keyof typeof notification]]),
+          ),
+        ),
+      )
+      .digest("hex");
+    f.setProvider("finished");
+    for (let retry = 0; retry < 2; retry++) {
+      const completed = await f.request(`/api/payments/nowpayments/webhook/${credential.id}`, {
+        method: "POST",
+        body: notification,
+        headers: { "x-nowpayments-sig": signature },
+      });
+      assert.equal(completed.response.status, 200);
+      assert.equal(completed.data.status, "paid");
+    }
+    assert.equal((await f.contacts.listMessages("owner", "received", null)).messages.length, 1);
+    assert.equal((await f.store.read(unrelated.id))!.status, "pending");
+    assert.equal(await f.store.credential("owner"), null);
+  } finally {
+    await f.pg.close();
+  }
+});

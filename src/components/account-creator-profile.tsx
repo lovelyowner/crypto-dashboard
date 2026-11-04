@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import { CreatorProfile } from "./creator-profile";
 import { ProfilePublication } from "./profile-publication";
 import { ProfileContactSettings } from "./profile-contact-settings";
@@ -26,6 +27,10 @@ async function accountProfile(method: "GET" | "PUT", profile?: CreatorProfileDat
 
 export function AccountCreatorProfile({ onOpenAccount }: { onOpenAccount: () => void }) {
   const { user, isPending } = useCurrentUserState();
+  const [publicationRevision, setPublicationRevision] = useState(0);
+  const refreshPublishedWallets = useCallback(() => {
+    setPublicationRevision((value) => value + 1);
+  }, []);
   return (
     <>
       {!user && (
@@ -43,10 +48,12 @@ export function AccountCreatorProfile({ onOpenAccount }: { onOpenAccount: () => 
               profile={profile}
               accountAvailable={Boolean(user)}
               accountKey={user?.id ?? null}
+              onPublicationChange={refreshPublishedWallets}
             />
             <ProfileContactSettings
               accountAvailable={Boolean(user)}
               accountKey={user?.id ?? null}
+              publicationRevision={publicationRevision}
             />
           </>
         )}
