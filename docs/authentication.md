@@ -99,3 +99,13 @@ After changing Preview variables or callback registration, redeploy the preview 
 Bluesky, Fluxer, Stoat, Hey/Lens, and Mastodon integrations are tracked in the [development proposals](proposals.md#add-next). The login interface lists only the five implemented adapters. Provider profile links remain separate from account authentication.
 
 Yoti identity verification and service-held wallet keys are not enabled. Identity verification does not itself store or recover crypto keys. A custodial product requires a separately designed and reviewed key-management service. The application never sends locally generated wallet recovery phrases to its account service.
+
+## Social callback continuation
+
+Local TOTP/recovery applies to OAuth callbacks as well as password and passkey sign-in. A successful provider authentication for a 2FA-enabled account first removes the temporary session and issues the official signed challenge cookie. The browser returns to the exact-origin `/login?twoFactor=1` challenge screen; no account session is usable until TOTP or a backup code succeeds. The selected bounded session duration and Remember this browser choice survive this continuation. Unchecked social sign-in uses a browser-session cookie while its server expiry stays bounded. Trusted-device policy remains the library's existing policy.
+
+Provider errors return to `/login` with allowlisted, user-facing copy; provider descriptions are never echoed. Login/link requests include an explicit safe error callback. Only validated local creator-page destinations survive `next`.
+
+Use the configured stable sign-in origin. An immutable Vercel deployment and its branch alias cannot share host-only OAuth state cookies. The UI links to the configured origin when they differ rather than trusting arbitrary preview hosts. The preview footer also exposes the platform-provided branch link when available.
+
+**Website sign-in setup** shows public presence checks for account storage, signing security, and the sign-in origin, and can copy a checklist of variable names/statuses. It never returns secrets and does not test database/provider connectivity. Preview still requires the isolated `PREVIEW_DATABASE_URL`, `PREVIEW_BETTER_AUTH_SECRET`, and `PREVIEW_BETTER_AUTH_URL` trio; each desired social service needs its own registered ID/secret and callback.

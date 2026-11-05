@@ -1,0 +1,75 @@
+.preview-deployment-status {
+  min-width: 0;
+  max-width: 100%;
+  background: #fff;
+  color: #666;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.preview-deployment-status summary {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 8px 0;
+  box-sizing: border-box;
+  color: #999;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.preview-deployment-status summary:hover {
+  color: #333;
+}
+
+.preview-deployment-status-content {
+  max-width: 360px;
+  margin: 4px 0 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+
+.preview-deployment-status dl {
+  margin: 0;
+}
+
+.preview-deployment-status dl > div + div {
+  margin-top: 4px;
+}
+
+.preview-deployment-status dt {
+  color: #999;
+}
+
+.preview-deployment-status dd {
+  margin: 0;
+  color: #666;
+}
+
+.preview-deployment-status code {
+  font-size: inherit;
+}
+
+.preview-deployment-status a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 4px;
+  border-radius: 3px;
+  color: #666;
+  text-underline-offset: 3px;
+}
+
+.preview-deployment-status a:hover {
+  color: #333;
+}
+
+.preview-deployment-status summary:focus-visible,
+.preview-deployment-status a:focus-visible {
+  color: #333;
+  outline: 2px solid #ccc;
+  outline-offset: 3px;
+}

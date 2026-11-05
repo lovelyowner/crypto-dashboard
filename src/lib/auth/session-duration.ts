@@ -63,6 +63,15 @@ export function sessionDurationPlugin(): BetterAuthPlugin {
               throw new APIError("BAD_REQUEST", {
                 message: "Choose a session duration of 1 hour, 1 day, or 7 days.",
               });
+            const remember = ctx.headers?.get(passkeyRememberHeader);
+            if (
+              ctx.path === "/sign-in/social" &&
+              remember != null &&
+              !["true", "false"].includes(remember)
+            )
+              throw new APIError("BAD_REQUEST", {
+                message: "Choose whether to remember this browser.",
+              });
           }),
         },
       ],
@@ -71,7 +80,10 @@ export function sessionDurationPlugin(): BetterAuthPlugin {
           matcher: (ctx) => completesLogin(ctx.path) || ctx.path === "/sign-out",
           handler: createAuthMiddleware(async (ctx) => {
             const session = ctx.context.newSession;
-            if (ctx.path === passkeyLogin) {
+            if (
+              ctx.path === passkeyLogin ||
+              (ctx.path === "/sign-in/social" && ctx.headers?.has(passkeyRememberHeader))
+            ) {
               const remember = ctx.headers?.get(passkeyRememberHeader) === "true";
               if (remember) expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
               else

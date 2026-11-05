@@ -531,13 +531,13 @@ try {
   refreshGate = new Promise((resolve) => {
     releaseRefresh = resolve;
   });
-  await health.getByRole("button", { name: "Refresh data", exact: true }).click();
+  await healthPage.getByRole("button", { name: "Refresh all", exact: true }).click();
   await health.getByRole("heading", { name: "Refreshing public data", exact: true }).waitFor();
   await check(
     "refreshing health retains completed results and prevents overlapping retries",
     async () => {
       assert.equal(
-        await health.getByRole("button", { name: "Refresh data", exact: true }).isDisabled(),
+        await healthPage.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
         true,
       );
       assert.match(await health.textContent(), /last completed results remain visible/);
@@ -578,9 +578,7 @@ try {
         0,
       );
       assert.equal(
-        await healthPage
-          .getByRole("button", { name: "Refresh balances", exact: true })
-          .isDisabled(),
+        await healthPage.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
         true,
       );
       assert.match(await health.textContent(), /2 of 4/);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import type { WatchedAddress } from "@/lib/ledger-store";
 import { isValidAddress } from "@/lib/chains";
 import { formatTransactionDate, shortAddress } from "@/lib/format";
@@ -11,6 +11,8 @@ import {
   saveTokenWatches,
   TOKEN_WATCH_STORAGE_KEY,
   tokenWatchOwner,
+  tokenWatchOwnerCandidates,
+  reattachTokenWatch,
   type TokenWatch,
 } from "@/lib/token-watch";
 import "./token-balances.css";
@@ -20,6 +22,8 @@ export type TokenBalancesProps = {
   watched: readonly WatchedAddress[];
   hideBalances: boolean;
   paused: boolean;
+  refreshRequest?: number;
+  onReadingChange?: (reading: boolean) => void;
 };
 
 function timestamp(value: number): string {
@@ -36,7 +40,13 @@ function resultKey(entry: TokenWatch): string {
   ]);
 }
 
-export function TokenBalances({ watched, hideBalances, paused }: TokenBalancesProps) {
+export function TokenBalances({
+  watched,
+  hideBalances,
+  paused,
+  refreshRequest = 0,
+  onReadingChange,
+}: TokenBalancesProps) {
   const [entries, setEntries] = useState<TokenWatch[]>([]);
   const [loaded, setLoaded] = useState<"loading" | "ready" | "invalid">("loading");
   const [error, setError] = useState("");
@@ -50,7 +60,11 @@ export function TokenBalances({ watched, hideBalances, paused }: TokenBalancesPr
   const [reading, setReading] = useState(false);
   const [online, setOnline] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [manualRefresh, setManualRefresh] = useState(0);
+  const [reviewOwner, setReviewOwner] = useState<{ id: string; ownerId: string } | null>(null);
+  useEffect(() => {
+    onReadingChange?.(reading);
+    return () => onReadingChange?.(false);
+  }, [reading, onReadingChange]);
   const owners = useMemo(
     () =>
       watched.filter(
@@ -147,7 +161,7 @@ export function TokenBalances({ watched, hideBalances, paused }: TokenBalancesPr
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [loaded, online, visible, paused, readable, manualRefresh]);
+  }, [loaded, online, visible, paused, readable, refreshRequest]);
 
   const persist = (next: readonly TokenWatch[]): boolean => {
     try {
@@ -208,20 +222,12 @@ export function TokenBalances({ watched, hideBalances, paused }: TokenBalancesPr
         <div>
           <h2>Token balances</h2>
           <p>
-            Watch an explicit Ethereum/ERC20 contract or Solana/SPL mint for an existing public
-            owner. Exact token units are separate from native portfolio totals.
+            {entries.length
+              ? "Exact token units · excluded from native USD totals."
+              : "Choose a watched public owner and an Ethereum/ERC20 contract or Solana/SPL mint. Token units stay separate from native USD totals."}
           </p>
         </div>
         <div className="token-actions">
-          <button
-            type="button"
-            onClick={() => setManualRefresh((value) => value + 1)}
-            disabled={
-              loaded !== "ready" || !online || !visible || paused || !readable.length || reading
-            }
-          >
-            <RefreshCw size={14} aria-hidden="true" /> {reading ? "Reading…" : "Refresh tokens"}
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -355,6 +361,7 @@ export function TokenBalances({ watched, hideBalances, paused }: TokenBalancesPr
               {rows.map((entry) => {
                 const owner = tokenWatchOwner(entry, watched);
                 const result = results[resultKey(entry)];
+                const candidates = tokenWatchOwnerCandidates(entry, watched);
                 return (
                   <tr key={entry.id} data-token-watch={entry.id}>
                     <td>
@@ -376,9 +383,71 @@ export function TokenBalances({ watched, hideBalances, paused }: TokenBalancesPr
                       <code title={entry.ownerAddress}>{entry.ownerAddress}</code>
                       {!owner && (
                         <span className="token-orphan">
-                          Owner no longer watched. Restore the same public owner or remove this
-                          token watch.
+                          Owner no longer watched. Add the same public owner, then review
+                          reattachment.
                         </span>
+                      )}
+                      {!owner && candidates.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReviewOwner({ id: entry.id, ownerId: candidates[0]!.id })
+                          }
+                        >
+                          Review owner
+                        </button>
+                      )}
+                      {!owner && reviewOwner?.id === entry.id && (
+                        <div className="token-owner-review">
+                          <label>
+                            Matching watched owner
+                            <select
+                              aria-label="Matching watched owner"
+                              value={reviewOwner.ownerId}
+                              onChange={(event) =>
+                                setReviewOwner({ id: entry.id, ownerId: event.target.value })
+                              }
+                            >
+                              {candidates.map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.label || shortAddress(candidate.address)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <p>
+                            Resume reads only for the same network and public address shown above.
+                          </p>
+                          <button
+                            type="button"
+                            disabled={!candidates.length}
+                            onClick={() => {
+                              try {
+                                const next = reattachTokenWatch(
+                                  entries,
+                                  entry.id,
+                                  reviewOwner.ownerId,
+                                  watched,
+                                );
+                                if (persist(next)) {
+                                  setReviewOwner(null);
+                                  setNotice("Token owner reattached. Public reads can resume.");
+                                }
+                              } catch (cause) {
+                                setError(
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : "Could not reattach this owner.",
+                                );
+                              }
+                            }}
+                          >
+                            Confirm reattachment
+                          </button>
+                          <button type="button" onClick={() => setReviewOwner(null)}>
+                            Cancel review
+                          </button>
+                        </div>
                       )}
                     </td>
                     <td className="token-balance-value">

@@ -3,6 +3,7 @@ import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/a
 import { twoFactor } from "better-auth/plugins";
 import type { BetterAuthPlugin } from "better-auth";
 import { isFreshAccountSession } from "./policy";
+import { safeAccountReturnPath } from "./return-to";
 
 export const PASSKEY_AUTHENTICATION_PATH = "/passkey/verify-authentication";
 export const PASSKEY_REMEMBER_HEADER = "x-fathom-remember-me";
@@ -49,7 +50,7 @@ export function accountPasskeys(origin: string) {
 }
 
 /** Use Better Auth's own challenge, attempt limits, TOTP, and recovery implementation. */
-export function accountTwoFactor() {
+export function accountTwoFactor(origin?: string) {
   const plugin = twoFactor({
     issuer: "Fathom",
     totpOptions: { digits: 6, period: 30 },
@@ -57,8 +58,40 @@ export function accountTwoFactor() {
   });
   for (const hook of plugin.hooks.after) {
     const original = hook.matcher;
-    hook.matcher = (ctx) => ctx.path === PASSKEY_AUTHENTICATION_PATH || original(ctx);
+    hook.matcher = (ctx) =>
+      ctx.path === PASSKEY_AUTHENTICATION_PATH ||
+      ctx.path === "/sign-in/social" ||
+      Boolean(ctx.path?.startsWith("/callback/")) ||
+      original(ctx);
   }
+  plugin.hooks.after.push({
+    matcher: (ctx) => Boolean(ctx.path?.startsWith("/callback/")),
+    handler: createAuthMiddleware(async (ctx) => {
+      const result = ctx.context.returned;
+      if (
+        !result ||
+        typeof result !== "object" ||
+        !("twoFactorRedirect" in result) ||
+        result.twoFactorRedirect !== true
+      )
+        return undefined;
+      // The official hook has removed the temporary session and issued its signed
+      // challenge cookie. Continue in our existing TOTP/recovery UI, not a JSON page.
+      const canonical = origin ?? new URL(ctx.context.baseURL).origin;
+      const login = new URL("/login", canonical);
+      login.searchParams.set("twoFactor", "1");
+      const previous = ctx.context.responseHeaders?.get("location");
+      if (previous) {
+        const target = new URL(previous, canonical);
+        const next =
+          target.origin === canonical
+            ? safeAccountReturnPath(target.searchParams.get("next"))
+            : null;
+        if (next) login.searchParams.set("next", next);
+      }
+      throw ctx.redirect(login.href);
+    }),
+  });
   return plugin;
 }
 

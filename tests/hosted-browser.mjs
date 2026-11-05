@@ -66,6 +66,9 @@ async function serveHostedBuild() {
 async function startHostedServer() {
   const env = { ...process.env, NODE_ENV: "production", VERCEL: "1" };
   for (const name of [
+    "PREVIEW_DATABASE_URL",
+    "PREVIEW_BETTER_AUTH_URL",
+    "PREVIEW_BETTER_AUTH_SECRET",
     "DATABASE_URL",
     "BETTER_AUTH_URL",
     "BETTER_AUTH_SECRET",
@@ -154,6 +157,11 @@ async function runChecks() {
       async () => {
         const response = await fetch(`${baseURL}/api/auth/config`);
         assert.equal(response.status, 200);
+        const metadata = await fetch(`${baseURL}/api/deployment`);
+        assert.equal(metadata.status, 200);
+        assert.deepEqual(await metadata.json(), { preview: false });
+        assert.match(metadata.headers.get("cache-control"), /no-store/);
+        assert.equal((await fetch(`${baseURL}/api/account/export`)).status, 503);
         assert.match(response.headers.get("cache-control"), /no-store/);
         assert.deepEqual(await response.json(), {
           configured: false,
@@ -168,6 +176,7 @@ async function runChecks() {
             twitch: false,
           },
           production: true,
+          setup: { environment: "preview", database: false, secret: false, origin: false },
         });
       },
     );
@@ -240,7 +249,7 @@ async function runChecks() {
         const note = await dialog.locator(".account-provider-note").textContent();
         assert.match(note, /Social sign-in is not enabled/);
         await dialog.getByText("Sign-in services", { exact: true }).click();
-        const services = dialog.locator(".account-service-statuses");
+        const services = dialog.locator(".account-provider-options .account-service-statuses");
         assert.equal(await services.locator("li").count(), 5);
         assert.equal(await services.getByText("Not enabled", { exact: true }).count(), 5);
         assert.equal(

@@ -214,9 +214,27 @@ try {
       assert.equal(await firstRow.locator(".creator-inbox-unread").innerText(), "Unread");
     },
   );
-  await firstRow.click();
+  await check(
+    "conversation rows support arrow/Home/End keys without opening another thread",
+    async () => {
+      const rows = ownerInbox.locator(".creator-inbox-row");
+      await rows.first().focus();
+      await rows.first().press("End");
+      assert.equal(await rows.last().evaluate((node) => node === document.activeElement), true);
+      await rows.last().press("Home");
+      assert.equal(await rows.first().evaluate((node) => node === document.activeElement), true);
+    },
+  );
+  await firstRow.focus();
+  await firstRow.press("Enter");
   const transcript = ownerInbox.locator(".creator-inbox-transcript");
   await transcript.getByText(incoming, { exact: true }).waitFor();
+  assert.equal(
+    await ownerInbox
+      .locator(".creator-inbox-thread-summary h3")
+      .evaluate((node) => node === document.activeElement),
+    true,
+  );
   const draft = ownerInbox.getByLabel("Private reply", { exact: true });
   const unsaved = "Keep this unsent creator reply 📝 <literal>";
   await draft.fill(unsaved);
@@ -239,30 +257,41 @@ try {
       assert.equal((await json(owner, "/api/inbox")).unreadCounts.received, 1);
     },
   );
-  await check("Copy conversation includes only the loaded transcript and preserves Unicode", async () => {
-    await ownerPage.evaluate(() => {
-      window.__copiedConversation = null;
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          writeText: async (text) => {
-            window.__copiedConversation = text;
+  await check(
+    "Copy conversation includes only the loaded transcript and preserves Unicode",
+    async () => {
+      await ownerPage.evaluate(() => {
+        window.__copiedConversation = null;
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            writeText: async (text) => {
+              window.__copiedConversation = text;
+            },
           },
-        },
+        });
       });
-    });
-    await ownerInbox.getByRole("button", { name: "Copy conversation", exact: true }).click();
-    const copied = await ownerPage.evaluate(() => window.__copiedConversation);
-    assert.equal(typeof copied, "string");
-    for (const text of ["Original older conversation 🌙", "Activity sender 🪐", incoming, liveReply]) {
-      assert.ok(copied.includes(text), `Copied transcript includes ${text}`);
-    }
-    for (const text of [unsaved, "Original newer conversation 🪐", first.id, second.id]) {
-      assert.ok(!copied.includes(text), "Copied transcript excludes drafts, other threads, and IDs");
-    }
-    assert.equal(await draft.inputValue(), unsaved);
-    assert.equal(replyWrites, 0);
-  });
+      await ownerInbox.getByRole("button", { name: "Copy conversation", exact: true }).click();
+      const copied = await ownerPage.evaluate(() => window.__copiedConversation);
+      assert.equal(typeof copied, "string");
+      for (const text of [
+        "Original older conversation 🌙",
+        "Activity sender 🪐",
+        incoming,
+        liveReply,
+      ]) {
+        assert.ok(copied.includes(text), `Copied transcript includes ${text}`);
+      }
+      for (const text of [unsaved, "Original newer conversation 🪐", first.id, second.id]) {
+        assert.ok(
+          !copied.includes(text),
+          "Copied transcript excludes drafts, other threads, and IDs",
+        );
+      }
+      assert.equal(await draft.inputValue(), unsaved);
+      assert.equal(replyWrites, 0);
+    },
+  );
 
   await hidden(ownerPage, true);
   const hiddenReply = "This arrives while the inbox tab is hidden";
@@ -367,25 +396,29 @@ try {
   const firstDraft = "Unsent draft for the older conversation 🌙";
   const secondDraft = "Separate unsent draft for the newer conversation 🪐";
   const writesBeforeDraftNavigation = replyWrites;
-  await check("separate reply drafts survive conversation, Back, and folder navigation", async () => {
-    await draft.fill(firstDraft);
-    await repliedRow.getByText("Draft", { exact: true }).waitFor();
-    await secondRow.click();
-    assert.equal(await draft.inputValue(), "");
-    await draft.fill(secondDraft);
-    await ownerInbox.getByRole("button", { name: "Messages", exact: true }).click();
-    assert.equal(await draft.count(), 0);
-    await repliedRow.click();
-    assert.equal(await draft.inputValue(), firstDraft);
-    await ownerInbox.getByRole("tab", { name: "Sent", exact: true }).click();
-    await ownerInbox.getByText("No messages here yet", { exact: true }).waitFor();
-    await ownerInbox.getByRole("tab", { name: "Received", exact: true }).click();
-    await repliedRow.getByText("Draft", { exact: true }).waitFor();
-    await secondRow.getByText("Draft", { exact: true }).waitFor();
-    await secondRow.click();
-    assert.equal(await draft.inputValue(), secondDraft);
-    assert.equal(replyWrites, writesBeforeDraftNavigation);
-  });
+  await check(
+    "separate reply drafts survive conversation, Back, and folder navigation",
+    async () => {
+      await draft.fill(firstDraft);
+      await repliedRow.getByText("Draft", { exact: true }).waitFor();
+      await secondRow.click();
+      assert.equal(await draft.inputValue(), "");
+      await draft.fill(secondDraft);
+      await ownerInbox.getByRole("button", { name: "Messages", exact: true }).click();
+      await ownerInbox.locator(".creator-inbox-row:focus").waitFor();
+      assert.equal(await draft.count(), 0);
+      await repliedRow.click();
+      assert.equal(await draft.inputValue(), firstDraft);
+      await ownerInbox.getByRole("tab", { name: "Sent", exact: true }).click();
+      await ownerInbox.getByText("No messages here yet", { exact: true }).waitFor();
+      await ownerInbox.getByRole("tab", { name: "Received", exact: true }).click();
+      await repliedRow.getByText("Draft", { exact: true }).waitFor();
+      await secondRow.getByText("Draft", { exact: true }).waitFor();
+      await secondRow.click();
+      assert.equal(await draft.inputValue(), secondDraft);
+      assert.equal(replyWrites, writesBeforeDraftNavigation);
+    },
+  );
   await check("discarding a reply draft clears only that conversation", async () => {
     await ownerInbox.getByRole("button", { name: "Discard draft", exact: true }).click();
     assert.equal(await draft.inputValue(), "");

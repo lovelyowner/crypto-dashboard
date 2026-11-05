@@ -4,12 +4,16 @@ import { handleContactRequest } from "./contact.server";
 import { handlePaymentRequest } from "./payments.server";
 import { handleModerationRequest } from "./moderation.server";
 import { handlePublicationRequest, handlePublicProfileRequest } from "./publication.server";
+import { handleDeploymentStatusRequest } from "./deployment-status";
+import { handleAccountExportRequest } from "./account-export.server";
 
 /** Shared same-origin API for the Node server and Vercel functions. */
 export async function handleApiRequest(request: Request): Promise<Response> {
   const pathname = new URL(request.url).pathname;
   let response: Response;
-  if (
+  if (pathname === "/api/deployment") response = handleDeploymentStatusRequest(request);
+  else if (pathname === "/api/account/export") response = await handleAccountExportRequest(request);
+  else if (
     pathname === "/api/profile/contact" ||
     pathname === "/api/inbox" ||
     pathname.startsWith("/api/inbox/") ||

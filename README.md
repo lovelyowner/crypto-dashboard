@@ -2,7 +2,7 @@
 
 A multi-chain, browser-first crypto address dashboard, rebuilt from the supplied Grok application. Watch public addresses without signing in; create passphrase-encrypted wallets locally. Account authentication runs on a small same-origin server. No Grok services or shared broker credentials are required.
 
-See [development proposals](docs/proposals.md) for prioritized additions and simplifications.
+See [development proposals](docs/proposals.md) for prioritized additions and simplifications. The latest development batch adds a preview build/link menu, explicit account setup diagnostics, OAuth callback 2FA/recovery, unified refresh/import controls, token-owner reattachment, inbox keyboard focus, and a bounded [account/profile export](docs/account-data.md).
 
 Ongoing updates use the `preview` branch, with production kept on `main`. See the [preview workflow](docs/preview-workflow.md) for the reusable Vercel link, separate preview account configuration, and efficient UI review.
 

@@ -67,8 +67,8 @@ async function addToken(region, owner, address, label) {
   await region.getByLabel("Token label (optional)", { exact: true }).fill(label);
   await region.getByRole("button", { name: "Save token watch", exact: true }).click();
 }
-async function refresh(region) {
-  await region.getByRole("button", { name: "Refresh tokens", exact: true }).click();
+async function refresh() {
+  await page.getByRole("button", { name: "Refresh all", exact: true }).click();
 }
 async function palette(region) {
   const violations = await region.evaluate((root) => {
@@ -273,7 +273,7 @@ try {
         await page.getByRole("button", { name: "Show balances", exact: true }).count(),
         1,
       );
-      await region.getByRole("button", { name: "Refresh tokens", exact: true }).waitFor();
+      await page.getByRole("button", { name: "Refresh all", exact: true }).waitFor();
       for (const value of await region.locator(".token-balance-value strong").allTextContents())
         assert.equal(value, "••••••");
       await page.getByRole("button", { name: "Show balances", exact: true }).click();
@@ -284,20 +284,20 @@ try {
     "public RPC failures and a wrong chain replace old amounts with explicit failure states",
     async () => {
       ethereumState = "unavailable";
-      await refresh(region);
+      await refresh();
       await ethRow.getByText("Unavailable", { exact: true }).waitFor();
       assert.match(await ethRow.innerText(), /Public RPC unavailable/);
       assert.ok(!(await ethRow.innerText()).includes(ETH_EXACT));
       ethereumState = "wrong-chain";
-      await refresh(region);
+      await refresh();
       await ethRow.getByText("Unsupported", { exact: true }).waitFor();
       assert.match(await ethRow.innerText(), /not on Ethereum mainnet/);
       ethereumState = "metadata";
-      await refresh(region);
+      await refresh();
       await ethRow.getByText(ETH_EXACT, { exact: true }).waitFor();
       assert.match(await ethRow.innerText(), /Token metadata unavailable/);
       ethereumState = "ready";
-      await refresh(region);
+      await refresh();
       await ethRow.getByText(`${ETH_EXACT} HUGE`, { exact: true }).waitFor();
     },
   );
@@ -321,7 +321,7 @@ try {
     await page.getByRole("button", { name: "Done", exact: true }).click();
     await region.getByText("Token reads paused", { exact: true }).waitFor();
     assert.equal(
-      await region.getByRole("button", { name: "Refresh tokens", exact: true }).isDisabled(),
+      await page.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
       true,
     );
     const before = tokenRequests.length;
@@ -329,15 +329,15 @@ try {
     await page.waitForTimeout(150);
     assert.equal(tokenRequests.length, before);
     await page.getByRole("button", { name: "Resume sync", exact: true }).click();
-    await region.getByRole("button", { name: "Refresh tokens", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Refresh all", exact: true }).waitFor();
     await context.setOffline(true);
     await region.getByText("Offline · reads stopped", { exact: true }).waitFor();
     assert.equal(
-      await region.getByRole("button", { name: "Refresh tokens", exact: true }).isDisabled(),
+      await page.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
       true,
     );
     await context.setOffline(false);
-    await region.getByRole("button", { name: "Refresh tokens", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Refresh all", exact: true }).waitFor();
   });
   await check(
     "removing an owner stops its reads but retains its removable token configuration",
@@ -349,13 +349,61 @@ try {
       const before = tokenRequests.filter(
         (request) => request.host === "ethereum-rpc.publicnode.com",
       ).length;
-      await refresh(region);
-      await region.getByRole("button", { name: "Refresh tokens", exact: true }).waitFor();
+      await refresh();
+      await page.getByRole("button", { name: "Refresh all", exact: true }).waitFor();
       assert.equal(
         tokenRequests.filter((request) => request.host === "ethereum-rpc.publicnode.com").length,
         before,
       );
       assert.equal((await configuration()).entries.length, 2);
+      await page.getByRole("button", { name: "Add address", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Network", { exact: true }).selectOption("ethereum");
+      await dialog.getByLabel("Public address", { exact: true }).fill(ETH_OWNER);
+      await dialog.locator('input[maxlength="80"]').fill("Ethereum owner");
+      await dialog.getByRole("checkbox").check();
+      await dialog.getByRole("button", { name: "Add to workspace", exact: true }).click();
+      await ethRow.getByRole("button", { name: "Review owner", exact: true }).click();
+      await ethRow.getByText("Reads stopped", { exact: true }).waitFor();
+      const beforeReview = tokenRequests.filter(
+        (request) => request.host === "ethereum-rpc.publicnode.com",
+      ).length;
+      await page.evaluate(() => {
+        window.originalTokenSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) {
+          if (key === "fathom.token-watch.v1")
+            throw new DOMException("Fixture quota", "QuotaExceededError");
+          return window.originalTokenSetItem.call(this, key, value);
+        };
+      });
+      await ethRow.getByRole("button", { name: "Confirm reattachment", exact: true }).click();
+      await region
+        .getByRole("alert")
+        .filter({ hasText: "Could not save token configuration" })
+        .waitFor();
+      assert.equal(
+        (await configuration()).entries.find((entry) => entry.chain === "ethereum").ownerId,
+        "owner-eth",
+      );
+      assert.equal(
+        tokenRequests.filter((request) => request.host === "ethereum-rpc.publicnode.com").length,
+        beforeReview,
+      );
+      await page.evaluate(() => {
+        Storage.prototype.setItem = window.originalTokenSetItem;
+      });
+      await ethRow.getByRole("button", { name: "Confirm reattachment", exact: true }).click();
+      await region
+        .getByText("Token owner reattached. Public reads can resume.", { exact: true })
+        .waitFor();
+      await ethRow.getByText(`${ETH_EXACT} HUGE`, { exact: true }).waitFor();
+      assert.notEqual(
+        (await configuration()).entries.find((entry) => entry.chain === "ethereum").ownerId,
+        "owner-eth",
+      );
+      page.once("dialog", (value) => value.accept());
+      await page.getByRole("button", { name: "Remove Ethereum owner", exact: true }).click();
+      await ethRow.getByText("Reads stopped", { exact: true }).waitFor();
       await ethRow
         .getByRole("button", { name: "Remove token watch Huge exact token 🪐", exact: true })
         .click();

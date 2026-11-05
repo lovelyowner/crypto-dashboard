@@ -36,6 +36,7 @@ let configuration = {
   passkeys: false,
 };
 let configurationMode = "pending";
+let deployment = { preview: false };
 const pendingConfigurations = new Map();
 async function releaseConfiguration(value) {
   const pending = [...pendingConfigurations.entries()];
@@ -80,6 +81,7 @@ await context.route("**/*", async (route) => {
     externalRequests.push(url.hostname);
     return route.abort("blockedbyclient");
   }
+  if (url.pathname === "/api/deployment") return json(route, deployment);
   if (!url.pathname.startsWith("/api/auth/")) return route.continue();
   const path = url.pathname.slice("/api/auth/".length);
   if (path === "config") {
@@ -120,7 +122,12 @@ await context.route("**/*", async (route) => {
   if (path === "passkey/list-user-passkeys") return json(route, []);
   if (["sign-in/social", "link-social", "unlink-account"].includes(path)) {
     const body = request.postDataJSON();
-    providerRequests.push({ path, body, duration: request.headers()["x-fathom-session-duration"] });
+    providerRequests.push({
+      path,
+      body,
+      duration: request.headers()["x-fathom-session-duration"],
+      remember: request.headers()["x-fathom-remember-me"],
+    });
     if (path === "unlink-account") {
       accounts = accounts.filter((account) => account.providerId !== body.providerId);
       return json(route, { status: true });
@@ -175,6 +182,7 @@ async function initiate(providerId, label, linking = false) {
     .click();
   await response;
   await page.waitForFunction(() => !document.querySelector(".account-provider[disabled]"));
+  if (!linking) assert.equal(providerRequests.at(-1).remember, "false");
   return providerRequests.at(-1);
 }
 try {
@@ -433,6 +441,132 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByText("Sign-in services", { exact: true }).click();
+  session = null;
+  accounts = [];
+  configurationMode = "ready";
+  configuration = {
+    configured: true,
+    emailRecovery: false,
+    providers: allProviders,
+    production: false,
+    passkeys: false,
+  };
+  await check(
+    "OAuth errors use safe copy and challenge returns open the existing recovery form",
+    async () => {
+      await openLogin(
+        "/login?error=access_denied&error_description=provider-secret&next=%2Fprovider-fixture",
+      );
+      await page.getByRole("alert").filter({ hasText: "Social sign-in was cancelled" }).waitFor();
+      assert.ok(!(await page.locator("body").innerText()).includes("provider-secret"));
+      assert.equal(new URL(page.url()).searchParams.has("error"), false);
+      await openLogin("/login?twoFactor=1&next=%2Fprovider-fixture", false);
+      await page.getByLabel("Authenticator code", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Use a backup code", exact: true }).click();
+      await page.getByLabel("Single-use backup code", { exact: true }).waitFor();
+      assert.equal(new URL(page.url()).searchParams.has("twoFactor"), false);
+    },
+  );
+  await check(
+    "an immutable deployment directs social sign-in to its configured canonical origin",
+    async () => {
+      configuration = {
+        ...configuration,
+        production: true,
+        signInOrigin: "https://canonical.example",
+      };
+      await openLogin("/login?next=%2Fprovider-fixture", false);
+      const link = page.getByRole("link", {
+        name: "Open the configured sign-in website",
+        exact: true,
+      });
+      await link.waitFor();
+      assert.equal(
+        await link.getAttribute("href"),
+        "https://canonical.example/login?next=%2Fprovider-fixture",
+      );
+      assert.equal(await page.locator(".account-provider").count(), 0);
+      assert.equal(
+        await page.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
+        true,
+      );
+    },
+  );
+  await check(
+    "preview metadata exposes the platform branch link without a guessed URL",
+    async () => {
+      deployment = {
+        preview: true,
+        branchUrl: "https://app-git-preview-team.vercel.app",
+        deploymentUrl: "https://app-build-team.vercel.app",
+        commit: "a".repeat(40),
+        branch: "preview",
+      };
+      await page.goto(origin, { waitUntil: "domcontentloaded" });
+      await page.getByText("Preview build aaaaaaa", { exact: true }).click();
+      assert.equal(
+        await page
+          .getByRole("link", { name: "Open latest preview", exact: true })
+          .getAttribute("href"),
+        deployment.branchUrl,
+      );
+      deployment = { preview: false };
+    },
+  );
+  configuration = {
+    configured: true,
+    emailRecovery: false,
+    providers: allProviders,
+    production: false,
+    passkeys: false,
+  };
+  await openLogin();
+  await check(
+    "the setup checklist explains missing preview settings without credential values",
+    async () => {
+      configuration = {
+        configured: false,
+        emailRecovery: false,
+        providers: {},
+        production: true,
+        passkeys: false,
+        setup: { environment: "preview", database: true, secret: false, origin: false },
+      };
+      await openLogin();
+      await page.getByText("Website sign-in setup", { exact: true }).click();
+      assert.equal(
+        await page
+          .locator(".account-setup-details")
+          .getByText("Needs setup", { exact: true })
+          .count(),
+        2,
+      );
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            writeText: async (text) => {
+              window.setupChecklist = text;
+            },
+          },
+        });
+      });
+      await page.getByRole("button", { name: "Copy setup checklist", exact: true }).click();
+      await page.getByRole("status").filter({ hasText: "Setup checklist copied" }).waitFor();
+      const report = await page.evaluate(() => window.setupChecklist);
+      assert.match(report, /PREVIEW_DATABASE_URL: configured/);
+      assert.match(report, /PREVIEW_BETTER_AUTH_SECRET: needed/);
+      assert.match(report, /GOOGLE_CLIENT_ID \/ GOOGLE_CLIENT_SECRET: not enabled/);
+      configuration = {
+        configured: true,
+        emailRecovery: false,
+        providers: allProviders,
+        production: false,
+        passkeys: false,
+      };
+      await openLogin();
+    },
+  );
   await check(
     "mobile provider choices fit the viewport, preserve the exact palette, and make no unsupported requests",
     async () => {

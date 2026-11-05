@@ -104,16 +104,14 @@ async function countSaved(page) {
   );
 }
 async function upload(page, text, name = "addresses.txt") {
-  await page
-    .getByLabel("Upload addresses TXT file", { exact: true })
-    .setInputFiles({
-      name,
-      mimeType: "text/plain",
-      buffer: typeof text === "string" ? Buffer.from(text) : text,
-    });
+  await page.getByLabel("Upload addresses TXT file", { exact: true }).setInputFiles({
+    name,
+    mimeType: "text/plain",
+    buffer: typeof text === "string" ? Buffer.from(text) : text,
+  });
 }
 async function openFileImport(page) {
-  await page.getByRole("button", { name: "Import TXT addresses", exact: true }).click();
+  await page.getByRole("button", { name: "Import addresses", exact: true }).click();
   await page.getByRole("heading", { name: "Import addresses from TXT", exact: true }).waitFor();
 }
 async function dismissToast(page) {
@@ -275,7 +273,7 @@ try {
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "Add address", exact: true }).click();
-  await page.getByRole("button", { name: "Upload TXT", exact: true }).click();
+  await page.getByRole("button", { name: "Import file", exact: true }).click();
   await check("Add address mode selector also opens the TXT importer", async () =>
     assert.equal(
       await page.getByRole("heading", { name: "Import addresses from TXT", exact: true }).count(),

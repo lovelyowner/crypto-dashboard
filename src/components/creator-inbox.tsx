@@ -183,6 +183,23 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
     background: boolean;
   }>({ cursor: null, revision: 0, background: false });
   const [selected, setSelected] = useState<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const inboxRoot = useRef<HTMLElement>(null);
+  const returnFocus = useRef<string | null>(null);
+  const restoringFocus = useRef(false);
+  useEffect(() => {
+    if (selected !== null || !restoringFocus.current) return;
+    restoringFocus.current = false;
+    const frame = requestAnimationFrame(() => {
+      const target =
+        (returnFocus.current ? rowRefs.current.get(returnFocus.current) : null) ??
+        rowRefs.current.values().next().value ??
+        inboxRoot.current?.querySelector<HTMLInputElement>(".creator-inbox-filters input");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected]);
   const [drafts, setDrafts] = useState(() => new Map<string, string>());
   const [search, setSearch] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -346,7 +363,7 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
       </section>
     );
   return (
-    <section className="creator-inbox" aria-label="Private creator inbox">
+    <section ref={inboxRoot} className="creator-inbox" aria-label="Private creator inbox">
       <div className="creator-inbox-heading">
         <div>
           <h2>Private inbox</h2>
@@ -513,7 +530,36 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
               key={message.id}
               type="button"
               className={`creator-inbox-row ${selected === message.id ? "selected" : ""}`}
-              onClick={() => setSelected(message.id)}
+              ref={(node) => {
+                if (node) rowRefs.current.set(message.id, node);
+                else rowRefs.current.delete(message.id);
+              }}
+              onClick={() => {
+                returnFocus.current = message.id;
+                setSelected(message.id);
+              }}
+              onKeyDown={(event) => {
+                if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                const rows = [
+                  ...event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>(
+                    ".creator-inbox-row",
+                  ),
+                ];
+                const index = rows.indexOf(event.currentTarget);
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? rows.length - 1
+                      : Math.max(
+                          0,
+                          Math.min(rows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)),
+                        );
+                if (rows[next]) {
+                  event.preventDefault();
+                  rows[next].focus();
+                }
+              }}
               aria-label={`Open ${message.kind === "donation" ? "donation note" : "message"} ${senderLabel(message)}${drafts.has(message.id) ? " · Unsaved draft" : ""}`}
               aria-pressed={selected === message.id}
             >
@@ -564,7 +610,10 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
             refreshToken={threadRefresh}
             draft={drafts.get(selected) ?? ""}
             onDraftChange={(text) => updateDraft(selected, text)}
-            onBack={() => setSelected(null)}
+            onBack={() => {
+              restoringFocus.current = true;
+              setSelected(null);
+            }}
             onRead={updateRead}
             onOpenAccount={onOpenAccount}
           />
@@ -600,6 +649,14 @@ function Conversation({
   onOpenAccount?: () => void;
 }) {
   const [thread, setThread] = useState<ContactThread | null>(null);
+  const conversationHeading = useRef<HTMLHeadingElement>(null);
+  const focusedConversation = useRef<string | null>(null);
+  useEffect(() => {
+    if (thread?.message.id === id && focusedConversation.current !== id) {
+      conversationHeading.current?.focus({ preventScroll: true });
+      focusedConversation.current = id;
+    }
+  }, [thread, id]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -785,7 +842,9 @@ function Conversation({
       {thread && (
         <>
           <header className="creator-inbox-thread-summary">
-            <h3>{senderLabel(thread.message)}</h3>
+            <h3 ref={conversationHeading} tabIndex={-1}>
+              {senderLabel(thread.message)}
+            </h3>
             <p>
               {thread.message.kind === "donation" ? "Donation note" : "Direct message"} ·{" "}
               {paymentLabel(thread.message.paymentStatus)}

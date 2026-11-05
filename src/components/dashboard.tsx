@@ -32,7 +32,6 @@ import {
   Search,
   ShieldCheck,
   Trash2,
-  Upload,
   Wallet,
   UserRound,
   X,
@@ -41,7 +40,7 @@ import { CHAINS, CHAIN_IDS, chainLabel, activityKey, type ChainId } from "@/lib/
 import { fetchActivity } from "@/lib/activity.functions";
 import { useLedger, type WatchedAddress } from "@/lib/ledger-store";
 import { formatUsd, formatTransactionDate, relativeTime, shortAddress } from "@/lib/format";
-import { downloadFile, parseWatchlist, portfolioSummary } from "@/lib/portfolio";
+import { downloadFile, portfolioSummary } from "@/lib/portfolio";
 import { AddressEntry, EditAddressLabel } from "./address-entry";
 import { SyncHealth } from "./sync-health";
 import { useWorkspaceView } from "@/lib/view-preferences";
@@ -55,6 +54,7 @@ import { AccountCreatorProfile } from "./account-creator-profile";
 import { CreatorInbox } from "./creator-inbox";
 import { FooterSocialLinks } from "./footer-social-links";
 import { TokenBalances } from "./token-balances";
+import { PreviewDeploymentStatus } from "./preview-deployment-status";
 
 type Tab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile" | "Inbox";
 type Modal = "address" | "wallet" | "account" | "settings" | "edit" | null;
@@ -103,7 +103,15 @@ export function Dashboard() {
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState("");
   const [menu, setMenu] = useState(false);
-  const importRef = useRef<HTMLInputElement>(null);
+  const [tokenRefresh, setTokenRefresh] = useState(0);
+  const [tokenReading, setTokenReading] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
+  useEffect(() => {
+    const update = () => setDocumentVisible(document.visibilityState === "visible");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
   useEffect(() => {
     const parameters = new URLSearchParams(window.location.search);
     if (
@@ -238,7 +246,8 @@ export function Dashboard() {
     );
   }
   function refreshData() {
-    if (canSync && !query.isFetching) {
+    if (canSync && documentVisible && !query.isFetching && !tokenReading) {
+      setTokenRefresh((value) => value + 1);
       forceNext.current = true;
       void query.refetch();
     }
@@ -296,19 +305,6 @@ export function Dashboard() {
   function exportSelected() {
     downloadWatches(selectedRows, "fathom-selected-watchlist.json");
   }
-  async function importWatches(file?: File) {
-    if (!file) return;
-    try {
-      if (file.size > 200000) throw new Error("Watchlist file is too large.");
-      const rows = parseWatchlist(JSON.parse(await file.text()));
-      const result = addWatchedBatch(rows);
-      if (result.error) throw new Error(result.error);
-      setToast(`Imported ${result.added} addresses; ${result.skipped} already watched.`);
-    } catch (e) {
-      setToast(e instanceof Error ? e.message : "Could not import watchlist.");
-    }
-    if (importRef.current) importRef.current.value = "";
-  }
   async function copy(value: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -351,20 +347,9 @@ export function Dashboard() {
           </button>
           <button className="nav-item" onClick={() => openAddress(undefined, "file")}>
             <FileUp size={19} />
-            Import TXT addresses
-          </button>
-          <button className="nav-item" onClick={() => importRef.current?.click()}>
-            <Upload size={19} />
-            Import watchlist
+            Import addresses
           </button>
         </nav>
-        <input
-          type="file"
-          accept=".json,application/json"
-          hidden
-          ref={importRef}
-          onChange={(e) => void importWatches(e.target.files?.[0])}
-        />
         <div className="sidebar-bottom">
           <button className="profile-button" onClick={() => setModal("account")}>
             <span className="avatar">{user?.displayName?.slice(0, 1).toUpperCase() || "G"}</span>
@@ -495,7 +480,6 @@ export function Dashboard() {
                 updatedAt={query.dataUpdatedAt}
                 online={online}
                 paused={preferences.syncPaused}
-                onRetry={canSync ? refreshData : undefined}
               />
               <div className="stat-grid">
                 <article className="stat balance-stat">
@@ -580,12 +564,18 @@ export function Dashboard() {
                     </select>
                   </label>
                   <button
-                    className={`icon-button ${query.isFetching ? "spinning" : ""}`}
-                    aria-label="Refresh balances"
-                    disabled={!canSync || !watched.length || query.isFetching}
+                    className={`button secondary ${query.isFetching || tokenReading ? "spinning" : ""}`}
+                    aria-label="Refresh all"
+                    disabled={
+                      !canSync ||
+                      !documentVisible ||
+                      !watched.length ||
+                      query.isFetching ||
+                      tokenReading
+                    }
                     onClick={refreshData}
                   >
-                    <RefreshCw size={16} />
+                    <RefreshCw size={16} /> Refresh all
                   </button>
                 </div>
               </div>
@@ -962,12 +952,16 @@ export function Dashboard() {
               )}
             </>
           )}
-          {tab === "Overview" && (
-            <TokenBalances
-              watched={watched}
-              hideBalances={preferences.hideBalances}
-              paused={preferences.syncPaused || !online}
-            />
+          {(tab === "Overview" || tab === "Activity") && (
+            <div hidden={tab !== "Overview"}>
+              <TokenBalances
+                watched={watched}
+                hideBalances={preferences.hideBalances}
+                paused={preferences.syncPaused}
+                refreshRequest={tokenRefresh}
+                onReadingChange={setTokenReading}
+              />
+            </div>
           )}
           {tab === "Wallets" && (
             <section className="panel wallets-page">
@@ -1018,6 +1012,7 @@ export function Dashboard() {
           )}
           <footer className="page-footer">
             <FooterSocialLinks />
+            <PreviewDeploymentStatus />
           </footer>
         </div>
       </main>

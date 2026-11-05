@@ -293,7 +293,7 @@ try {
       "300000",
     );
     assert.equal(
-      await page.getByRole("button", { name: "Refresh balances", exact: true }).isDisabled(),
+      await page.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
       true,
     );
     assert.equal(await page.getByRole("button", { name: "Resume sync", exact: true }).count(), 1);
@@ -304,7 +304,7 @@ try {
   await check("persisted pause blocks all initial external provider requests", async () => {
     assert.equal(externalRequests, beforePausedReload);
     assert.equal(
-      await page.getByRole("button", { name: "Refresh balances", exact: true }).isDisabled(),
+      await page.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
       true,
     );
   });
@@ -317,7 +317,7 @@ try {
   await check("offline state announces stale data and disables manual refresh", async () => {
     await page.locator(".workspace-state").filter({ hasText: "You are offline." }).waitFor();
     assert.equal(
-      await page.getByRole("button", { name: "Refresh balances", exact: true }).isDisabled(),
+      await page.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
       true,
     );
     assert.equal(await page.locator(".address-card").count(), 2);
@@ -393,13 +393,37 @@ try {
   const beforeRestore = externalRequests;
   await restoredPage.goto(baseURL, { waitUntil: "networkidle" });
   await restoredPage.locator(".address-empty").waitFor();
+  await restoredPage.getByRole("button", { name: "Import addresses", exact: true }).click();
+  await restoredPage.getByLabel("File format", { exact: true }).selectOption("json");
+  await restoredPage.getByLabel("Watchlist JSON file", { exact: true }).setInputFiles({
+    name: "fathom-watchlist.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(watchData)),
+  });
+  assert.equal(await restoredPage.locator(".address-card").count(), 0);
+  await restoredPage.getByRole("checkbox").check();
+  await restoredPage.evaluate(() => {
+    window.originalWatchlistSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "fathom.ledger.v1")
+        throw new DOMException("Fixture full storage", "QuotaExceededError");
+      return window.originalWatchlistSetItem.call(this, key, value);
+    };
+  });
+  await restoredPage.getByRole("button", { name: "Merge watchlist", exact: true }).click();
   await restoredPage
-    .locator('.sidebar input[type="file"]')
-    .setInputFiles({
-      name: "fathom-watchlist.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(watchData)),
-    });
+    .getByRole("alert")
+    .filter({ hasText: "Could not save the watchlist" })
+    .waitFor();
+  assert.equal(await restoredPage.locator(".address-card").count(), 0);
+  assert.equal(
+    await restoredPage.getByRole("button", { name: "Merge watchlist", exact: true }).isEnabled(),
+    true,
+  );
+  await restoredPage.evaluate(() => {
+    Storage.prototype.setItem = window.originalWatchlistSetItem;
+  });
+  await restoredPage.getByRole("button", { name: "Merge watchlist", exact: true }).click();
   await restoredPage.waitForFunction(() => document.querySelectorAll(".address-card").length === 2);
   await check(
     "exported watchlist restores Unicode labels and pins in a fresh browser",
@@ -425,9 +449,7 @@ try {
     async () => {
       assert.equal(externalRequests, beforeRestore);
       assert.equal(
-        await restoredPage
-          .getByRole("button", { name: "Refresh balances", exact: true })
-          .isDisabled(),
+        await restoredPage.getByRole("button", { name: "Refresh all", exact: true }).isDisabled(),
         true,
       );
     },

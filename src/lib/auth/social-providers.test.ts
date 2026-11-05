@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import {
   configuredSocialProviders,
   socialProviderAvailability,
 } from "./social-providers.server.ts";
+import { accountTwoFactor } from "./passkeys.server.ts";
 import { sessionDurationPlugin } from "./session-duration.ts";
 import { ACCOUNT_SESSION_POLICY, SESSION_DURATION_HEADER } from "./policy.ts";
 
@@ -59,6 +60,7 @@ test("official GitHub/Twitch OAuth flows preserve state, scopes, duration and ex
     session: [],
     account: [],
     verification: [],
+    twoFactor: [],
   };
   const auth = betterAuth({
     database: memoryAdapter(database),
@@ -80,9 +82,10 @@ test("official GitHub/Twitch OAuth flows preserve state, scopes, duration and ex
       },
     },
     advanced: { cookiePrefix: "fathom", useSecureCookies: false },
-    plugins: [sessionDurationPlugin()],
+    plugins: [accountTwoFactor(origin), sessionDurationPlugin()],
   });
   const cookies = new Map<string, string>();
+  let rememberSocial = false;
   async function request(path: string, body?: Record<string, unknown>, duration = "1h") {
     const response = await auth.handler(
       new Request(`${origin}/api/auth${path}`, {
@@ -91,6 +94,7 @@ test("official GitHub/Twitch OAuth flows preserve state, scopes, duration and ex
           origin,
           cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join("; "),
           [SESSION_DURATION_HEADER]: duration,
+          ...(path === "/sign-in/social" ? { "x-fathom-remember-me": String(rememberSocial) } : {}),
           ...(body ? { "content-type": "application/json" } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -109,13 +113,14 @@ test("official GitHub/Twitch OAuth flows preserve state, scopes, duration and ex
       status: response.status,
       body: text ? JSON.parse(text) : null,
       location: response.headers.get("location"),
+      cookies: response.headers.getSetCookie(),
     };
   }
   const authorization = new Map<string, URL>();
-  async function start(provider: "github" | "twitch", linking = false) {
+  async function start(provider: "github" | "twitch", linking = false, next?: string) {
     const result = await request(linking ? "/link-social" : "/sign-in/social", {
       provider,
-      callbackURL: "/login",
+      callbackURL: next ? `/login?next=${encodeURIComponent(next)}` : "/login",
       disableRedirect: true,
     });
     assert.equal(result.status, 200);
@@ -228,10 +233,20 @@ test("official GitHub/Twitch OAuth flows preserve state, scopes, duration and ex
   };
   try {
     for (const provider of ["github", "twitch"] as const) {
+      rememberSocial = provider === "twitch";
       const state = await start(provider);
       const result = await callback(provider, state);
       assert.equal(result.status, 302);
       assert.equal(result.location, "/login");
+      const sessionCookie = result.cookies
+        .filter((line) => line.startsWith("fathom.session_token="))
+        .at(-1);
+      assert.ok(sessionCookie);
+      assert.equal(
+        /Max-Age=/i.test(sessionCookie),
+        rememberSocial,
+        "OAuth respects the selected browser persistence",
+      );
       const session = (await request("/get-session")).body;
       assert.equal(session.user.email, identity[provider].email);
       assert.equal(session.user.emailVerified, true);
@@ -315,6 +330,60 @@ test("official GitHub/Twitch OAuth flows preserve state, scopes, duration and ex
       database.account.some((row) => row.userId === localUserId && row.providerId === "credential"),
       "password recovery remains independent",
     );
+    // Local 2FA must protect an existing account even after the provider authenticates it.
+    const enrollment = await request("/two-factor/enable", { password });
+    assert.equal(enrollment.status, 200);
+    const totpSecret = new URL(enrollment.body.totpURI).searchParams.get("secret")!;
+    const currentCode = () => {
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      const bits = [...totpSecret]
+        .map((ch) => alphabet.indexOf(ch).toString(2).padStart(5, "0"))
+        .join("");
+      const bytes = Buffer.from(bits.match(/.{8}/g)!.map((part) => parseInt(part, 2)));
+      const counter = Buffer.alloc(8);
+      counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+      const digest = createHmac("sha1", bytes).update(counter).digest();
+      return String((digest.readUInt32BE(digest.at(-1)! & 15) & 0x7fffffff) % 1_000_000).padStart(
+        6,
+        "0",
+      );
+    };
+    assert.equal((await request("/two-factor/verify-totp", { code: currentCode() })).status, 200);
+    await request("/sign-out", {});
+    rememberSocial = false;
+    const protectedCallback = await callback("github", await start("github", false, "/creator"));
+    assert.equal(protectedCallback.status, 302);
+    const continuation = new URL(protectedCallback.location!);
+    assert.equal(continuation.origin, origin);
+    assert.equal(continuation.pathname, "/login");
+    assert.equal(continuation.searchParams.get("twoFactor"), "1");
+    assert.equal(continuation.searchParams.get("next"), "/creator");
+    assert.equal((await request("/get-session")).body, null, "OAuth cannot bypass local 2FA");
+    const wrongCode = String((Number(currentCode()) + 1) % 1_000_000).padStart(6, "0");
+    assert.equal((await request("/two-factor/verify-totp", { code: wrongCode })).status, 401);
+    assert.equal((await request("/get-session")).body, null);
+    const backupResult = await request("/two-factor/verify-backup-code", {
+      code: enrollment.body.backupCodes[0],
+    });
+    assert.equal(backupResult.status, 200);
+    const recoveryCookie = backupResult.cookies
+      .filter((line) => line.startsWith("fathom.session_token="))
+      .at(-1);
+    assert.ok(recoveryCookie);
+    assert.equal(
+      /Max-Age=/i.test(recoveryCookie),
+      false,
+      "2FA keeps the chosen browser-session cookie policy",
+    );
+    const recovered = (await request("/get-session")).body;
+    assert.equal(recovered.user.id, localUserId);
+    const seconds = (new Date(recovered.session.expiresAt).getTime() - Date.now()) / 1000;
+    assert.ok(seconds > 3590 && seconds <= 3600, "OAuth/2FA preserves selected duration");
+    await request("/sign-out", {});
+    await callback("github", await start("github"));
+    assert.equal((await request("/get-session")).body, null);
+    assert.equal((await request("/two-factor/verify-totp", { code: currentCode() })).status, 200);
+    assert.equal((await request("/get-session")).body.user.id, localUserId);
     await request("/sign-out", {});
     identity.github.id = "unlinked-provider-with-same-email";
     const implicit = await callback("github", await start("github"));

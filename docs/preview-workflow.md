@@ -23,3 +23,7 @@ Production and local development retain their existing `DATABASE_URL`, `BETTER_A
 ## Review efficiently
 
 Use the same branch preview link on desktop and mobile after completed batches. Routine updates need only that link and a short changelog. Downloadable HTML/ZIP files and screenshots remain available when requested; they are not rebuilt for every edit. Real accounts, publishing, messaging, and passkeys require the configured server application.
+
+## Finding the latest UI inside the app
+
+On a Vercel Preview build, open the footer's **Preview build** menu. It shows the public build commit/branch and **Open latest preview** when Vercel supplies a valid `VERCEL_BRANCH_URL`. This uses the platform's actual alias; no hostname is guessed. The public `/api/deployment` endpoint exposes only validated preview metadata and is independent of account/database settings. Production and local environments return `{ "preview": false }` and show no menu. Optional metadata failures do not interrupt the dashboard.

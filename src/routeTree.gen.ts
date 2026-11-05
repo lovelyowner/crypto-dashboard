@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HandleRouteImport } from './routes/$handle'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiDeploymentRouteImport } from './routes/api/deployment'
 import { Route as ApiInboxRouteImport } from './routes/api/inbox'
 import { Route as ApiPaymentsRouteImport } from './routes/api/payments'
 import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
+import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiInboxIdRouteImport } from './routes/api/inbox/$id'
 import { Route as ApiModerationAccessRouteImport } from './routes/api/moderation/access'
@@ -49,6 +51,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDeploymentRoute = ApiDeploymentRouteImport.update({
+  id: '/api/deployment',
+  path: '/api/deployment',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiInboxRoute = ApiInboxRouteImport.update({
   id: '/api/inbox',
   path: '/api/inbox',
@@ -67,6 +74,11 @@ const ApiProfileRoute = ApiProfileRouteImport.update({
 const UHandleRoute = UHandleRouteImport.update({
   id: '/u/$handle',
   path: '/u/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
+  id: '/api/account/export',
+  path: '/api/account/export',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -162,10 +174,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$handle': typeof HandleRoute
   '/login': typeof LoginRoute
+  '/api/deployment': typeof ApiDeploymentRoute
   '/api/inbox': typeof ApiInboxRouteWithChildren
   '/api/payments': typeof ApiPaymentsRouteWithChildren
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
+  '/api/account/export': typeof ApiAccountExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
   '/api/moderation/access': typeof ApiModerationAccessRoute
@@ -188,10 +202,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$handle': typeof HandleRoute
   '/login': typeof LoginRoute
+  '/api/deployment': typeof ApiDeploymentRoute
   '/api/inbox': typeof ApiInboxRouteWithChildren
   '/api/payments': typeof ApiPaymentsRouteWithChildren
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
+  '/api/account/export': typeof ApiAccountExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
   '/api/moderation/access': typeof ApiModerationAccessRoute
@@ -215,10 +231,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$handle': typeof HandleRoute
   '/login': typeof LoginRoute
+  '/api/deployment': typeof ApiDeploymentRoute
   '/api/inbox': typeof ApiInboxRouteWithChildren
   '/api/payments': typeof ApiPaymentsRouteWithChildren
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
+  '/api/account/export': typeof ApiAccountExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
   '/api/moderation/access': typeof ApiModerationAccessRoute
@@ -243,10 +261,12 @@ export interface FileRouteTypes {
     | '/'
     | '/$handle'
     | '/login'
+    | '/api/deployment'
     | '/api/inbox'
     | '/api/payments'
     | '/api/profile'
     | '/u/$handle'
+    | '/api/account/export'
     | '/api/auth/$'
     | '/api/inbox/$id'
     | '/api/moderation/access'
@@ -269,10 +289,12 @@ export interface FileRouteTypes {
     | '/'
     | '/$handle'
     | '/login'
+    | '/api/deployment'
     | '/api/inbox'
     | '/api/payments'
     | '/api/profile'
     | '/u/$handle'
+    | '/api/account/export'
     | '/api/auth/$'
     | '/api/inbox/$id'
     | '/api/moderation/access'
@@ -295,10 +317,12 @@ export interface FileRouteTypes {
     | '/'
     | '/$handle'
     | '/login'
+    | '/api/deployment'
     | '/api/inbox'
     | '/api/payments'
     | '/api/profile'
     | '/u/$handle'
+    | '/api/account/export'
     | '/api/auth/$'
     | '/api/inbox/$id'
     | '/api/moderation/access'
@@ -322,10 +346,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HandleRoute: typeof HandleRoute
   LoginRoute: typeof LoginRoute
+  ApiDeploymentRoute: typeof ApiDeploymentRoute
   ApiInboxRoute: typeof ApiInboxRouteWithChildren
   ApiPaymentsRoute: typeof ApiPaymentsRouteWithChildren
   ApiProfileRoute: typeof ApiProfileRouteWithChildren
   UHandleRoute: typeof UHandleRoute
+  ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiModerationAccessRoute: typeof ApiModerationAccessRoute
   ApiModerationReportsRoute: typeof ApiModerationReportsRouteWithChildren
@@ -357,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/deployment': {
+      id: '/api/deployment'
+      path: '/api/deployment'
+      fullPath: '/api/deployment'
+      preLoaderRoute: typeof ApiDeploymentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/inbox': {
       id: '/api/inbox'
       path: '/api/inbox'
@@ -383,6 +416,13 @@ declare module '@tanstack/react-router' {
       path: '/u/$handle'
       fullPath: '/u/$handle'
       preLoaderRoute: typeof UHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/account/export': {
+      id: '/api/account/export'
+      path: '/api/account/export'
+      fullPath: '/api/account/export'
+      preLoaderRoute: typeof ApiAccountExportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -593,10 +633,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HandleRoute: HandleRoute,
   LoginRoute: LoginRoute,
+  ApiDeploymentRoute: ApiDeploymentRoute,
   ApiInboxRoute: ApiInboxRouteWithChildren,
   ApiPaymentsRoute: ApiPaymentsRouteWithChildren,
   ApiProfileRoute: ApiProfileRouteWithChildren,
   UHandleRoute: UHandleRoute,
+  ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiModerationAccessRoute: ApiModerationAccessRoute,
   ApiModerationReportsRoute: ApiModerationReportsRouteWithChildren,

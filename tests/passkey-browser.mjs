@@ -88,6 +88,14 @@ try {
     .get(new URL("/api/auth/get-session", baseURL).href)
     .then((response) => response.json());
   const remaining = Date.parse(session.session.expiresAt) - Date.now();
+  const exported = await context.request.get(new URL("/api/account/export", baseURL).href);
+  assert.equal(exported.status(), 200);
+  assert.match(exported.headers()["cache-control"], /no-store/);
+  const accountData = await exported.json();
+  assert.equal(accountData.scope, "account-profile");
+  assert.equal(accountData.account.id, session.user.id);
+  assert.equal(accountData.complete, false);
+  assert.ok(!("token" in accountData.account));
   assert.ok(
     remaining > 3_570_000 && remaining <= 3_600_000,
     "Passkey sign-in uses the selected one-hour session duration",

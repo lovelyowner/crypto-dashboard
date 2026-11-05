@@ -112,11 +112,7 @@ export function parseTokenWatches(raw: string | null): TokenWatch[] {
   } catch {
     throw new Error("The saved token watch configuration could not be read.");
   }
-  if (
-    !record(value) ||
-    !onlyKeys(value, ["version", "entries"]) ||
-    value.version !== 1
-  ) {
+  if (!record(value) || !onlyKeys(value, ["version", "entries"]) || value.version !== 1) {
     throw new Error("The saved token watch configuration has an unsupported format.");
   }
   return normalizeEntries(value.entries);
@@ -157,6 +153,58 @@ export function tokenWatchOwner(
         normalizeAddress(entry.chain, owner.address) ===
           normalizeAddress(entry.chain, entry.ownerAddress),
     ) ?? null
+  );
+}
+
+/** Offer matching public identities for review; an orphan never resumes reads implicitly. */
+export function tokenWatchOwnerCandidates(
+  entry: TokenWatch,
+  watched: readonly WatchedAddress[],
+): WatchedAddress[] {
+  let normalized: TokenWatch;
+  try {
+    normalized = normalizeEntry(entry);
+  } catch {
+    return [];
+  }
+  if (tokenWatchOwner(normalized, watched)) return [];
+  const seen = new Set<string>();
+  return watched.filter((owner) => {
+    if (
+      !identifier(owner.id) ||
+      owner.chain !== normalized.chain ||
+      typeof owner.address !== "string" ||
+      !isValidAddress(normalized.chain, owner.address) ||
+      normalizeAddress(normalized.chain, owner.address) !== normalized.ownerAddress ||
+      seen.has(owner.id)
+    )
+      return false;
+    seen.add(owner.id);
+    return true;
+  });
+}
+
+/** Plan an explicit identity-only update; callers must persist before publishing the new state. */
+export function reattachTokenWatch(
+  existing: readonly TokenWatch[],
+  entryId: string,
+  newOwnerId: string,
+  watched: readonly WatchedAddress[],
+): TokenWatch[] {
+  const normalized = normalizeEntries(existing);
+  const entry = normalized.find((known) => known.id === entryId);
+  if (!identifier(entryId) || !entry) throw new Error("This token watch no longer exists.");
+  if (!identifier(newOwnerId))
+    throw new Error("Choose a matching public owner from your watchlist.");
+  const current = tokenWatchOwner(entry, watched);
+  if (current) {
+    if (current.id === newOwnerId) return [...existing];
+    throw new Error("This token watch is already attached to its public owner.");
+  }
+  if (!tokenWatchOwnerCandidates(entry, watched).some((owner) => owner.id === newOwnerId))
+    throw new Error("Choose a watched owner on the same network with the same public address.");
+  return existing.map((known) =>
+    known.id === entryId ? { ...known, ownerId: newOwnerId } : known,
   );
 }
 

@@ -29,6 +29,9 @@ import {
 import { AccountProviders } from "./account-providers";
 import { socialProviderLabel, type SupportedSocialProviderId } from "@/lib/auth/providers";
 import { useAuthConfiguration } from "@/lib/auth/use-configuration";
+import { socialReturnError, socialReturnPath } from "@/lib/auth/social-return";
+import { AccountSetupStatus } from "./account-setup";
+import { AccountDataExport } from "./account-data-export";
 import "./account.css";
 
 type LinkedAccount = { id: string; providerId: string; accountId: string };
@@ -84,6 +87,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [resetToken, setResetToken] = useState("");
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [currentOrigin, setCurrentOrigin] = useState("");
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const passkeyOperation = useRef<AbortController | null>(null);
@@ -100,7 +104,24 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    setCurrentOrigin(window.location.origin);
     setReturnTo(safeAccountReturnPath(params.get("next")));
+    const providerError = socialReturnError(params.get("error"));
+    if (providerError) setError(providerError);
+    if (params.get("twoFactor") === "1") {
+      setMode("login");
+      setChallenge(true);
+    }
+    if (params.has("error") || params.has("twoFactor") || params.has("error_description")) {
+      params.delete("error");
+      params.delete("error_description");
+      params.delete("twoFactor");
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${params.size ? `?${params}` : ""}${window.location.hash}`,
+      );
+    }
     const token = params.get("token");
     if (params.get("reset") && token) {
       setResetToken(token);
@@ -146,6 +167,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void run(async () => {
+      if (otherSignInOrigin) throw new Error("Open the configured sign-in website to continue.");
       if (challenge) {
         await request(backupMode ? "two-factor/verify-backup-code" : "two-factor/verify-totp", {
           code,
@@ -169,7 +191,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         setResetToken("");
         setPassword("");
         setMode("login");
-        window.history.replaceState(null, "", window.location.pathname);
+        window.history.replaceState(window.history.state, "", window.location.pathname);
         setNotice("Password reset. Sign in with your new password.");
         return;
       }
@@ -217,30 +239,55 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
 
   const connect = (provider: SupportedSocialProviderId, linking: boolean) =>
     void run(async () => {
+      if (
+        configuration?.signInOrigin &&
+        currentOrigin &&
+        configuration.signInOrigin !== currentOrigin
+      )
+        throw new Error("Open the configured sign-in website before continuing with a service.");
       const result = linking
         ? await authClient.linkSocial({
             provider,
-            callbackURL: returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login",
+            callbackURL: socialReturnPath(returnTo),
+            errorCallbackURL: socialReturnPath(returnTo),
           })
         : await authClient.signIn.social({
             provider,
-            callbackURL: returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login",
-            fetchOptions: { headers: { [SESSION_DURATION_HEADER]: sessionDuration } },
+            callbackURL: socialReturnPath(returnTo),
+            errorCallbackURL: socialReturnPath(returnTo),
+            fetchOptions: {
+              headers: {
+                [SESSION_DURATION_HEADER]: sessionDuration,
+                "x-fathom-remember-me": String(rememberMe),
+              },
+            },
           });
       if (result.error)
         throw new Error(result.error.message || "Could not start provider sign-in.");
+      if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) {
+        setMode("login");
+        setChallenge(true);
+      }
     });
 
-  const providerButtons = (linking: boolean) => (
-    <AccountProviders
-      configuration={configuration}
-      availability={configurationStatus}
-      accounts={accounts}
-      linking={linking}
-      busy={busy}
-      onConnect={connect}
-    />
-  );
+  const otherSignInOrigin =
+    configuration?.production &&
+    configuration.signInOrigin &&
+    currentOrigin &&
+    configuration.signInOrigin !== currentOrigin
+      ? configuration.signInOrigin
+      : null;
+  const providerButtons = (linking: boolean) =>
+    otherSignInOrigin ? null : (
+      <AccountProviders
+        configuration={configuration}
+        availability={configurationStatus}
+        accounts={accounts}
+        linking={linking}
+        busy={busy}
+        onConnect={connect}
+      />
+    );
 
   return (
     <section className="account-panel">
@@ -291,6 +338,20 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           work.
         </p>
       )}
+      {otherSignInOrigin && (
+        <p className="account-message">
+          <a
+            href={new URL(socialReturnPath(returnTo), otherSignInOrigin).href}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Open the configured sign-in website
+          </a>{" "}
+          to keep verification on the correct address. Local wallets and watchlists stay with their
+          original website address.
+        </p>
+      )}
+      <AccountSetupStatus configuration={configuration} />
       {notice && (
         <p className="account-message account-success" role="status">
           {notice}
@@ -452,6 +513,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               disabled={
                 busy ||
                 !configuration?.configured ||
+                Boolean(otherSignInOrigin) ||
                 (mode === "recover" && !configuration.emailRecovery)
               }
               type="submit"
@@ -886,6 +948,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             origin={configuration?.passkeyOrigin}
           />
           <AccountSessions key={session.session.id} currentSessionId={session.session.id} />
+          <AccountDataExport key={`export:${user.id}`} />
         </>
       )}
       <p className="account-footnote">

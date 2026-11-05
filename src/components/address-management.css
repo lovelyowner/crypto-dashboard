@@ -6,6 +6,36 @@
   gap: 3px;
   background: var(--ui-background);
 }
+.address-json-preview {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid #ccc;
+}
+.address-json-preview li {
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+  overflow-wrap: anywhere;
+}
+.address-json-preview li:last-child {
+  border-bottom: 0;
+}
+.address-json-preview :is(strong, span, code) {
+  display: block;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.address-json-preview strong {
+  color: #333;
+}
+.address-json-preview span {
+  color: #999;
+}
+.address-json-preview code {
+  color: #666;
+}
 .address-mode button {
   flex: 1;
   border: 1px solid var(--ui-border);

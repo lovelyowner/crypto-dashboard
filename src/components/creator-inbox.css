@@ -431,3 +431,7 @@
     animation: none;
   }
 }
+.creator-inbox-thread-summary h3:focus-visible {
+  outline: 2px solid #ccc;
+  outline-offset: 3px;
+}

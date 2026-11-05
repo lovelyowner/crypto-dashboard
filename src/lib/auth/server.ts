@@ -16,6 +16,7 @@ import {
 import { sessionDurationPlugin } from "./session-duration";
 import { resolveDeploymentConfiguration } from "../deployment-config";
 import { configuredSocialProviders, socialProviderAvailability } from "./social-providers.server";
+import { readAccountSetup } from "./setup";
 import {
   accountPasskeys,
   accountTwoFactor,
@@ -59,6 +60,8 @@ export function publicAuthConfiguration() {
     passkeyOrigin,
     providers: socialProviderAvailability(socialProviders, authConfigured),
     production,
+    setup: readAccountSetup(process.env, production),
+    ...(authOrigin ? { signInOrigin: authOrigin } : {}),
   };
 }
 
@@ -88,6 +91,7 @@ export const auth = betterAuth({
   trustedOrigins: explicitBaseURL
     ? [explicitBaseURL]
     : ["http://localhost:8080", "http://127.0.0.1:8080"],
+  onAPIError: { errorURL: new URL("/login", passkeyOrigin).href },
   database: databaseUrl
     ? new Pool({ connectionString: databaseUrl })
     : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const },
@@ -135,7 +139,7 @@ export const auth = betterAuth({
     }),
     accountPasskeys(passkeyOrigin),
     passkeyPolicyPlugin(passkeyOrigin),
-    accountTwoFactor(),
+    accountTwoFactor(passkeyOrigin),
     sessionDurationPlugin(),
   ],
 });

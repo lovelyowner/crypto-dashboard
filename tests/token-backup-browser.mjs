@@ -190,7 +190,7 @@ async function fixtureContext(prefix = "current", entries = initial) {
   });
   if (entries.length) {
     await region.getByText("1 TOK", { exact: true }).waitFor();
-    await region.getByRole("button", { name: "Refresh tokens", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Refresh all", exact: true }).waitFor();
   }
   const controls = region.locator("details.token-backups");
   await controls.locator("summary").click();
@@ -379,7 +379,7 @@ try {
           (row) => row.ownerAddress !== "0x4444444444444444444444444444444444444444",
         ),
       );
-      await region.getByRole("button", { name: "Refresh tokens", exact: true }).waitFor();
+      await page.getByRole("button", { name: "Refresh all", exact: true }).waitFor();
       await region
         .locator("tbody tr")
         .filter({ hasText: "Imported SPL 🪐" })

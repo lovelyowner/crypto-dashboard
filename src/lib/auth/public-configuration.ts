@@ -1,5 +1,6 @@
 import { configuredAuthOrigin } from "./configuration";
 import { SOCIAL_PROVIDERS } from "./providers";
+import type { AccountSetup } from "./setup";
 
 export type PublicAuthConfiguration = {
   configured: boolean;
@@ -8,6 +9,8 @@ export type PublicAuthConfiguration = {
   production: boolean;
   passkeys: boolean;
   passkeyOrigin?: string;
+  signInOrigin?: string;
+  setup?: AccountSetup;
 };
 
 export const AUTH_CONFIGURATION_TIMEOUT_MS = 8_000;
@@ -41,6 +44,30 @@ export function parsePublicAuthConfiguration(value: unknown): PublicAuthConfigur
     typeof value.passkeyOrigin === "string"
       ? configuredAuthOrigin(value.passkeyOrigin, value.production)
       : null;
+  const signInOrigin =
+    typeof value.signInOrigin === "string"
+      ? configuredAuthOrigin(value.signInOrigin, value.production)
+      : null;
+  if (value.signInOrigin !== undefined && !signInOrigin) throw new Error(AUTH_CONFIGURATION_ERROR);
+  let setup: AccountSetup | undefined;
+  if (value.setup !== undefined) {
+    const item = value.setup;
+    if (
+      !record(item) ||
+      typeof item.environment !== "string" ||
+      !["local", "preview", "production"].includes(item.environment) ||
+      typeof item.database !== "boolean" ||
+      typeof item.secret !== "boolean" ||
+      typeof item.origin !== "boolean"
+    )
+      throw new Error(AUTH_CONFIGURATION_ERROR);
+    setup = {
+      environment: item.environment as AccountSetup["environment"],
+      database: item.database,
+      secret: item.secret,
+      origin: item.origin,
+    };
+  }
   if (value.passkeys === true && value.configured && !origin)
     throw new Error(AUTH_CONFIGURATION_ERROR);
   return {
@@ -50,6 +77,8 @@ export function parsePublicAuthConfiguration(value: unknown): PublicAuthConfigur
     providers,
     passkeys: value.configured && value.passkeys === true,
     ...(origin ? { passkeyOrigin: origin } : {}),
+    ...(signInOrigin ? { signInOrigin } : {}),
+    ...(setup ? { setup } : {}),
   };
 }
 

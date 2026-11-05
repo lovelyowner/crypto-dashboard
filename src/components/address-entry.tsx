@@ -10,7 +10,7 @@ import {
 } from "@/lib/chains";
 import { useLedger, type WatchedAddress } from "@/lib/ledger-store";
 import { parseAddressLines } from "@/lib/watchlist";
-import { TextAddressImport } from "./text-address-import";
+import { AddressFileImport } from "./address-file-import";
 import { parseAddressText } from "@/lib/address-import";
 import "./address-management.css";
 
@@ -95,7 +95,7 @@ export function AddressEntry({
         [
           ["single", "Single address"],
           ["bulk", "Bulk add"],
-          ["file", "Upload TXT"],
+          ["file", "Import file"],
         ] as const
       ).map(([value, title]) => (
         <button
@@ -113,7 +113,7 @@ export function AddressEntry({
     </div>
   );
   if (mode === "file")
-    return <TextAddressImport navigation={modeButtons} onClose={onClose} onAdded={onAdded} />;
+    return <AddressFileImport navigation={modeButtons} onClose={onClose} onAdded={onAdded} />;
   return (
     <form onSubmit={submit} className="add-address-form">
       <span className="modal-symbol">
