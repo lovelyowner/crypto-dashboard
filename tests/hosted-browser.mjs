@@ -160,7 +160,13 @@ async function runChecks() {
           emailRecovery: false,
           passkeys: false,
           passkeyOrigin: "http://localhost:8080",
-          providers: { google: false, discord: false, twitter: false },
+          providers: {
+            google: false,
+            discord: false,
+            twitter: false,
+            github: false,
+            twitch: false,
+          },
           production: true,
         });
       },
@@ -220,7 +226,7 @@ async function runChecks() {
     await check("hosted account panel clearly requires setup and disables sign-in", async () => {
       await dialog
         .getByRole("alert")
-        .filter({ hasText: /production database, signing secret, and HTTPS origin/ })
+        .filter({ hasText: /database, signing secret, and HTTPS origin for this/ })
         .waitFor();
       assert.equal(
         await dialog.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
@@ -232,8 +238,12 @@ async function runChecks() {
       async () => {
         assert.equal(await dialog.locator(".account-provider").count(), 0);
         const note = await dialog.locator(".account-provider-note").textContent();
-        assert.match(note, /Google, Discord, Twitter \/ X: server setup required/);
-        assert.match(note, /Bluesky, Fluxer, and Stoat sign-in are not integrated/);
+        assert.match(note, /Social sign-in needs server setup/);
+        await dialog.getByText("Sign-in services", { exact: true }).click();
+        const services = dialog.locator(".account-service-statuses");
+        assert.equal(await services.locator("li").count(), 10);
+        assert.equal(await services.getByText("Server setup required", { exact: true }).count(), 5);
+        assert.equal(await services.getByText("Integration needed", { exact: true }).count(), 5);
         assert.equal(
           await dialog.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),
           0,

@@ -320,25 +320,12 @@ export function Dashboard() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${menu ? "is-open" : ""}`}>
-        <a
-          className="brand"
-          href="/"
-          onClick={(event) => {
-            event.preventDefault();
-            changeTab("Overview");
-          }}
-          aria-label="Fathom home"
-        >
-          <span className="brand-mark">
-            f<span>·</span>
-          </span>
-          fathom<span className="brand-dot">®</span>
-        </a>
         <nav aria-label="Main navigation">
           {NAV.map(({ name, icon: Icon }) => (
             <button
               className={`nav-item ${tab === name ? "active" : ""}`}
               onClick={() => changeTab(name)}
+              aria-current={tab === name ? "page" : undefined}
               key={name}
             >
               <Icon size={19} />
@@ -349,28 +336,28 @@ export function Dashboard() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-divider" />
-        <span className="sidebar-caption">WORKSPACE TOOLS</span>
-        <button className="nav-item" onClick={() => setModal("account")}>
-          <ShieldCheck size={19} />
-          Account & security
-        </button>
-        <button className="nav-item" onClick={() => setModal("settings")}>
-          <Settings size={19} />
-          Workspace settings
-        </button>
-        <button className="nav-item" onClick={exportWatches}>
-          <ArrowDownToLine size={19} />
-          Export watchlist
-        </button>
-        <button className="nav-item" onClick={() => openAddress(undefined, "file")}>
-          <FileUp size={19} />
-          Import TXT addresses
-        </button>
-        <button className="nav-item" onClick={() => importRef.current?.click()}>
-          <Upload size={19} />
-          Import watchlist
-        </button>
+        <nav className="sidebar-tools" aria-label="Workspace tools">
+          <button className="nav-item" onClick={() => setModal("account")}>
+            <ShieldCheck size={19} />
+            Account & security
+          </button>
+          <button className="nav-item" onClick={() => setModal("settings")}>
+            <Settings size={19} />
+            Workspace settings
+          </button>
+          <button className="nav-item" onClick={exportWatches}>
+            <ArrowDownToLine size={19} />
+            Export watchlist
+          </button>
+          <button className="nav-item" onClick={() => openAddress(undefined, "file")}>
+            <FileUp size={19} />
+            Import TXT addresses
+          </button>
+          <button className="nav-item" onClick={() => importRef.current?.click()}>
+            <Upload size={19} />
+            Import watchlist
+          </button>
+        </nav>
         <input
           type="file"
           accept=".json,application/json"
@@ -438,19 +425,23 @@ export function Dashboard() {
           </div>
         </header>
         <div className="page">
-          <div className="page-heading">
-            <h1 className="sr-only">{tab}</h1>
-            <div className="heading-actions">
-              <button className="button secondary" onClick={() => setModal("wallet")}>
-                <KeyRound size={16} />
-                Create wallet
-              </button>
-              <button className="button primary" onClick={() => openAddress()}>
-                <Plus size={17} />
-                Add address
-              </button>
+          <h1 className="sr-only">{tab}</h1>
+          {(tab === "Overview" || tab === "Activity" || tab === "Wallets") && (
+            <div className="page-heading">
+              <div className="heading-actions" role="group" aria-label={`${tab} actions`}>
+                <button className="button secondary" onClick={() => setModal("wallet")}>
+                  <KeyRound size={16} />
+                  {tab === "Wallets" ? "Open wallet manager" : "Create wallet"}
+                </button>
+                {tab !== "Wallets" && (
+                  <button className="button primary" onClick={() => openAddress()}>
+                    <Plus size={17} />
+                    Add address
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
           {(!online || preferences.syncPaused) && (
             <div className="notice workspace-state" role="status">
               {!online ? <WifiOff size={18} /> : <Pause size={18} />}
@@ -984,10 +975,6 @@ export function Dashboard() {
                 <h2>
                   Local encrypted wallets <span className="pill">{wallets.length}</span>
                 </h2>
-                <button className="button primary" onClick={() => setModal("wallet")}>
-                  <Plus size={17} />
-                  Open wallet manager
-                </button>
               </div>
               <div className="wallet-intro">
                 <p>

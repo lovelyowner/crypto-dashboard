@@ -116,46 +116,11 @@ svg.lucide {
   display: flex;
   flex-direction: column;
 }
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 11px;
-  font-size: 29px;
-  letter-spacing: -1.4px;
-  font-weight: 650;
-}
-.brand-mark {
-  width: 34px;
-  height: 35px;
-  border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ui-icon);
-  font-family: Georgia, serif;
-  font-size: 35px;
-  font-style: italic;
-  padding-bottom: 3px;
-  position: relative;
-}
-.brand-mark > span {
-  font-style: normal;
-  font-size: 30px;
-  position: absolute;
-  right: 4px;
-  top: 6px;
-}
-.brand-dot {
-  font-size: 10px;
-  color: var(--ui-text-2);
-  align-self: flex-start;
-  margin: 5px 0 0 -6px;
-  letter-spacing: 0;
-}
 .sidebar nav {
-  margin-top: 28px;
+  margin-top: 0;
+}
+.sidebar .sidebar-tools {
+  margin-top: 16px;
 }
 .nav-item {
   display: flex;
@@ -173,7 +138,6 @@ svg.lucide {
   font-weight: 500;
 }
 .nav-item.active {
-  box-shadow: inset 2px 0 var(--ui-border);
   font-weight: 650;
   color: var(--ui-text-3);
   background: var(--ui-background);
@@ -187,18 +151,6 @@ svg.lucide {
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 10px;
-}
-.sidebar-divider {
-  border-top: 1px solid var(--ui-border);
-  height: 1px;
-  background: var(--ui-background);
-  margin: 23px 12px;
-}
-.sidebar-caption {
-  font-size: 10px;
-  letter-spacing: 1.3px;
-  color: var(--ui-text-1);
-  margin: 0 13px 16px;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -298,10 +250,10 @@ svg.lucide {
 }
 .page-heading {
   display: flex;
-  justify-content: flex-end;
-  gap: 20px;
+  justify-content: flex-start;
   align-items: center;
-  margin-bottom: 24px;
+  min-width: 0;
+  margin-bottom: 20px;
 }
 .eyebrow {
   color: var(--ui-text-1);
@@ -319,8 +271,9 @@ h1 {
 }
 .heading-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 9px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 .button {
   display: inline-flex;
@@ -1188,10 +1141,6 @@ td small {
   h1 {
     font-size: 26px;
   }
-  .heading-actions {
-    flex-direction: column;
-    padding-top: 0;
-  }
   .stat {
     padding: 17px;
   }
@@ -1216,10 +1165,6 @@ td small {
   .main {
     margin-left: 180px;
   }
-  .brand {
-    font-size: 25px;
-    padding-left: 3px;
-  }
   .nav-item {
     padding: 12px 9px;
     font-size: 12px;
@@ -1230,10 +1175,6 @@ td small {
   }
   .topbar {
     padding: 0 20px;
-  }
-  .page-heading {
-    align-items: flex-start;
-    gap: 14px;
   }
   h1 {
     font-size: 25px;
@@ -1283,12 +1224,6 @@ td small {
   .sidebar.is-open {
     transform: translateX(0);
   }
-  .sidebar .brand {
-    display: none;
-  }
-  .sidebar nav {
-    margin-top: 10px;
-  }
   .main {
     margin-left: 0;
   }
@@ -1307,16 +1242,17 @@ td small {
     padding: 25px 17px 0;
   }
   .page-heading {
-    flex-direction: column;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
   }
   .heading-actions {
-    flex-direction: row;
     width: 100%;
   }
   .heading-actions .button {
     flex: 1;
     min-height: 40px;
+  }
+  .heading-actions .button:only-child {
+    flex: 0 1 auto;
   }
   .stat-grid {
     gap: 10px;

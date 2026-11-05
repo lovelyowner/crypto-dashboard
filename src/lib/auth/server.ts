@@ -15,6 +15,7 @@ import {
 } from "./policy";
 import { sessionDurationPlugin } from "./session-duration";
 import { resolveDeploymentConfiguration } from "../deployment-config";
+import { configuredSocialProviders, socialProviderAvailability } from "./social-providers.server";
 import {
   accountPasskeys,
   accountTwoFactor,
@@ -47,12 +48,7 @@ function developmentSecret(): string {
 const secret =
   configuredSecret ?? (production ? randomBytes(32).toString("hex") : developmentSecret());
 
-const googleId = env("GOOGLE_CLIENT_ID"),
-  googleSecret = env("GOOGLE_CLIENT_SECRET");
-const discordId = env("DISCORD_CLIENT_ID"),
-  discordSecret = env("DISCORD_CLIENT_SECRET");
-const twitterId = env("TWITTER_CLIENT_ID"),
-  twitterSecret = env("TWITTER_CLIENT_SECRET");
+const socialProviders = configuredSocialProviders(process.env);
 const emailConfigured = Boolean(env("RESEND_API_KEY") && env("AUTH_EMAIL_FROM"));
 
 export function publicAuthConfiguration() {
@@ -61,11 +57,7 @@ export function publicAuthConfiguration() {
     emailRecovery: authConfigured && emailConfigured,
     passkeys: authConfigured && passkeyConfiguration(passkeyOrigin).enabled,
     passkeyOrigin,
-    providers: {
-      google: Boolean(authConfigured && googleId && googleSecret),
-      discord: Boolean(authConfigured && discordId && discordSecret),
-      twitter: Boolean(authConfigured && twitterId && twitterSecret),
-    },
+    providers: socialProviderAvailability(socialProviders, authConfigured),
     production,
   };
 }
@@ -120,17 +112,7 @@ export const auth = betterAuth({
         },
       }
     : {}),
-  socialProviders: {
-    ...(googleId && googleSecret
-      ? { google: { clientId: googleId, clientSecret: googleSecret } }
-      : {}),
-    ...(discordId && discordSecret
-      ? { discord: { clientId: discordId, clientSecret: discordSecret } }
-      : {}),
-    ...(twitterId && twitterSecret
-      ? { twitter: { clientId: twitterId, clientSecret: twitterSecret } }
-      : {}),
-  },
+  socialProviders,
   account: {
     encryptOAuthTokens: true,
     accountLinking: {

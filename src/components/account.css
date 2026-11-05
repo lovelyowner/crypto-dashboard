@@ -194,6 +194,42 @@
   line-height: 1.6;
   margin: 12px 0;
 }
+.account-service-details {
+  margin: 14px 0 0;
+  color: #666;
+  font-size: 12px;
+}
+.account-service-details summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.account-service-details summary:focus-visible {
+  outline: 2px solid #ccc;
+  outline-offset: 3px;
+}
+.account-service-statuses {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+.account-service-statuses li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  padding: 10px 0;
+  border-top: 1px solid #ccc;
+  color: #999;
+  overflow-wrap: anywhere;
+}
+.account-service-name {
+  color: #333;
+}
+.account-service-statuses small {
+  grid-column: 1 / -1;
+  color: #666;
+  font-size: 11px;
+  line-height: 1.6;
+}
 .account-provider-connected {
   display: flex;
   align-items: center;

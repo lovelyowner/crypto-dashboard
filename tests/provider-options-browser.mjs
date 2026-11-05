@@ -1,0 +1,369 @@
+/** UI fixtures verify provider choices and SDK requests; they never contact identity services. */
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+
+const baseURL = process.env.TEST_BASE_URL || "http://127.0.0.1:8080";
+const origin = new URL(baseURL).origin;
+const supported = [
+  ["google", "Google"],
+  ["discord", "Discord"],
+  ["twitter", "Twitter / X"],
+  ["github", "GitHub"],
+  ["twitch", "Twitch"],
+];
+const unsupported = ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"];
+const allProviders = Object.fromEntries(supported.map(([id]) => [id, true]));
+const browser = await chromium.launch({
+  ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+  headless: true,
+  args: ["--no-sandbox"],
+});
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const page = await context.newPage();
+page.setDefaultTimeout(15_000);
+const errors = [];
+const unexpectedAuthRequests = [];
+const providerRequests = [];
+const externalRequests = [];
+page.on("pageerror", (error) => errors.push(error.message));
+page.on("dialog", (dialog) => dialog.accept());
+let checks = 0;
+let configuration = {
+  configured: false,
+  emailRecovery: false,
+  providers: allProviders,
+  production: false,
+  passkeys: false,
+};
+let session = null;
+let accounts = [];
+const now = new Date().toISOString();
+const expiry = new Date(Date.now() + 86_400_000).toISOString();
+const signedInSession = {
+  session: {
+    id: "provider-fixture-session",
+    token: "fixture-session-token",
+    userId: "provider-fixture-user",
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: expiry,
+    userAgent: "Fixture browser",
+  },
+  user: {
+    id: "provider-fixture-user",
+    name: "Provider fixture",
+    email: "provider-fixture@example.com",
+    emailVerified: true,
+    username: "provider fixture",
+    twoFactorEnabled: false,
+    createdAt: now,
+    updatedAt: now,
+  },
+};
+function linked(providerId) {
+  return { id: `account-${providerId}`, providerId, accountId: `provider-account-${providerId}` };
+}
+async function json(route, data, status = 200) {
+  await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
+}
+await context.route("**/*", async (route) => {
+  const request = route.request();
+  const url = new URL(request.url());
+  if (url.origin !== origin) {
+    externalRequests.push(url.hostname);
+    return route.abort("blockedbyclient");
+  }
+  if (!url.pathname.startsWith("/api/auth/")) return route.continue();
+  const path = url.pathname.slice("/api/auth/".length);
+  if (path === "config") return json(route, configuration);
+  if (path === "get-session") return json(route, session);
+  if (path === "list-accounts") return json(route, accounts);
+  if (path === "list-sessions") return json(route, session ? [session.session] : []);
+  if (path === "passkey/list-user-passkeys") return json(route, []);
+  if (["sign-in/social", "link-social", "unlink-account"].includes(path)) {
+    const body = request.postDataJSON();
+    providerRequests.push({ path, body, duration: request.headers()["x-fathom-session-duration"] });
+    if (path === "unlink-account") {
+      accounts = accounts.filter((account) => account.providerId !== body.providerId);
+      return json(route, { status: true });
+    }
+    // Keep this UI fixture on the page. The real OAuth protocol has separate server tests.
+    return json(route, { url: `${origin}/fixture-authorize`, redirect: false });
+  }
+  unexpectedAuthRequests.push(`${request.method()} ${path}`);
+  return json(route, { message: "Unexpected provider UI fixture request." }, 404);
+});
+async function check(name, run) {
+  await run();
+  checks += 1;
+  console.log(`PASS ${name}`);
+}
+async function openLogin(path = "/login") {
+  await page.goto(new URL(path, origin).href, { waitUntil: "networkidle" });
+  await page.locator(".account-panel").waitFor();
+  await page.getByText("Sign-in services", { exact: true }).waitFor();
+}
+function callbackPath(request) {
+  const callback = new URL(request.body.callbackURL, origin);
+  assert.equal(callback.origin, origin, "Provider callbacks remain on this application origin");
+  assert.equal(callback.pathname, "/login");
+  return callback;
+}
+async function initiate(providerId, label, linking = false) {
+  const path = linking ? "/api/auth/link-social" : "/api/auth/sign-in/social";
+  const response = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      new URL(response.url()).pathname === path && request.postDataJSON()?.provider === providerId
+    );
+  });
+  await page
+    .getByRole("button", { name: `${linking ? "Connect" : "Continue with"} ${label}`, exact: true })
+    .click();
+  await response;
+  await page.waitForFunction(() => !document.querySelector(".account-provider[disabled]"));
+  return providerRequests.at(-1);
+}
+try {
+  await openLogin();
+  await check(
+    "unconfigured account service shows setup guidance instead of inert provider buttons",
+    async () => {
+      assert.equal(await page.locator(".account-provider").count(), 0);
+      await page
+        .locator(".account-provider-note")
+        .filter({ hasText: "Social sign-in needs server setup" })
+        .waitFor();
+      assert.equal(await page.locator(".account-service-details").getAttribute("open"), null);
+      await page.getByText("Sign-in services", { exact: true }).click();
+      assert.equal(await page.locator(".account-service-statuses li").count(), 10);
+      assert.equal(await page.locator(".account-service-statuses button").count(), 0);
+      assert.equal(
+        await page
+          .locator(".account-service-statuses")
+          .getByText("Server setup required", { exact: true })
+          .count(),
+        5,
+      );
+      assert.equal(
+        await page
+          .locator(".account-service-statuses")
+          .getByText("Integration needed", { exact: true })
+          .count(),
+        5,
+      );
+    },
+  );
+
+  configuration = {
+    ...configuration,
+    configured: true,
+    providers: {
+      google: true,
+      discord: false,
+      twitter: "true",
+      github: true,
+      twitch: 1,
+      bluesky: true,
+      mastodon: true,
+    },
+  };
+  await openLogin();
+  await check(
+    "only supported providers with a true boolean configuration become actions",
+    async () => {
+      assert.deepEqual(
+        await page
+          .locator(".account-provider")
+          .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))),
+        ["Continue with Google", "Continue with GitHub"],
+      );
+      assert.equal(await page.locator(".account-provider:disabled").count(), 0);
+      await page.getByText("Sign-in services", { exact: true }).click();
+      assert.equal(
+        await page
+          .locator(".account-service-statuses")
+          .getByText("Available", { exact: true })
+          .count(),
+        2,
+      );
+      for (const label of unsupported) {
+        const row = page
+          .locator(".account-service-statuses li")
+          .filter({ has: page.locator(".account-service-name", { hasText: label }) });
+        assert.match(await row.innerText(), /Integration needed/);
+      }
+    },
+  );
+
+  configuration = { ...configuration, providers: allProviders };
+  await openLogin("/login?next=%2Fprovider-fixture");
+  await page.locator(".account-panel").getByRole("combobox").selectOption("7d");
+  await check(
+    "all five configured login actions initiate the correct SDK provider with safe callbacks and duration",
+    async () => {
+      assert.equal(await page.locator(".account-provider").count(), 5);
+      for (const [id, label] of supported) {
+        const request = await initiate(id, label);
+        assert.equal(request.path, "sign-in/social");
+        assert.equal(request.body.provider, id);
+        assert.equal(callbackPath(request).searchParams.get("next"), "/provider-fixture");
+        assert.equal(request.duration, "7d");
+      }
+    },
+  );
+  await page.getByRole("button", { name: "New here? Create an account", exact: true }).click();
+  await page.locator(".account-panel").getByRole("combobox").selectOption("1h");
+  await check(
+    "signup keeps email registration and the same five working social actions",
+    async () => {
+      assert.equal(
+        await page.getByRole("button", { name: "Create account", exact: true }).count(),
+        1,
+      );
+      assert.equal(await page.locator('input[autocomplete="email"]').count(), 1);
+      assert.equal(await page.locator(".account-provider").count(), 5);
+      for (const [id, label] of supported) {
+        const request = await initiate(id, label);
+        assert.equal(request.body.provider, id);
+        assert.equal(callbackPath(request).searchParams.get("next"), "/provider-fixture");
+        assert.equal(request.duration, "1h");
+      }
+    },
+  );
+
+  session = signedInSession;
+  accounts = [linked("credential"), linked("github")];
+  await openLogin();
+  await check(
+    "signed-in accounts keep independent recovery and show connected services without duplicate connect actions",
+    async () => {
+      await page.getByText("GitHub connected", { exact: true }).waitFor();
+      assert.equal(
+        await page.getByRole("button", { name: "Connect GitHub", exact: true }).count(),
+        0,
+      );
+      assert.equal(await page.locator(".account-provider").count(), 4);
+      await page
+        .getByText("Password sign-in is available independently of social providers.", {
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await page.getByRole("heading", { name: "Change password", exact: true }).count(),
+        1,
+      );
+      const request = await initiate("google", "Google", true);
+      assert.equal(request.path, "link-social");
+      assert.equal(request.body.provider, "google");
+      callbackPath(request);
+    },
+  );
+  await page
+    .locator(".account-linked")
+    .filter({ hasText: "GitHub" })
+    .getByRole("button", { name: "Disconnect", exact: true })
+    .click();
+  await page.getByRole("status").filter({ hasText: "Provider disconnected." }).waitFor();
+  await check(
+    "disconnecting a linked provider uses its account identity and leaves password access available",
+    async () => {
+      const request = providerRequests.findLast((request) => request.path === "unlink-account");
+      assert.equal(request.body.providerId, "github");
+      assert.equal(request.body.accountId, "provider-account-github");
+      assert.equal(await page.getByText("GitHub connected", { exact: true }).count(), 0);
+      assert.equal(
+        await page.getByRole("button", { name: "Connect GitHub", exact: true }).count(),
+        1,
+      );
+      assert.deepEqual(
+        accounts.map((account) => account.providerId),
+        ["credential"],
+      );
+      await page
+        .getByText("Password sign-in is available independently of social providers.", {
+          exact: true,
+        })
+        .waitFor();
+    },
+  );
+
+  accounts = [linked("twitch")];
+  await openLogin();
+  await check(
+    "the final social method cannot be disconnected and independent recovery remains discoverable",
+    async () => {
+      await page.getByText("Twitch connected", { exact: true }).waitFor();
+      assert.equal(
+        await page
+          .locator(".account-linked")
+          .getByRole("button", { name: "Disconnect", exact: true })
+          .isDisabled(),
+        true,
+      );
+      assert.equal(
+        await page.getByRole("heading", { name: "Add password recovery", exact: true }).count(),
+        1,
+      );
+      assert.match(
+        await page
+          .getByRole("region", { name: "Independent access readiness", exact: true })
+          .innerText(),
+        /One social provider is linked/,
+      );
+      assert.equal(
+        await page.getByRole("button", { name: "Connect Google", exact: true }).isEnabled(),
+        true,
+      );
+    },
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByText("Sign-in services", { exact: true }).click();
+  await check(
+    "mobile provider choices fit the viewport, preserve the exact palette, and make no unsupported requests",
+    async () => {
+      assert.ok(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      );
+      const allowed = new Set([
+        "rgb(255, 255, 255)",
+        "rgb(204, 204, 204)",
+        "rgb(153, 153, 153)",
+        "rgb(102, 102, 102)",
+        "rgb(51, 51, 51)",
+        "rgba(0, 0, 0, 0)",
+      ]);
+      const colors = await page.locator(".account-provider-options").evaluate((root) =>
+        [root, ...root.querySelectorAll("*")].flatMap((element) => {
+          const style = getComputedStyle(element);
+          return [
+            style.color,
+            style.backgroundColor,
+            ...["Top", "Right", "Bottom", "Left"].flatMap((side) =>
+              Number.parseFloat(style[`border${side}Width`]) ? [style[`border${side}Color`]] : [],
+            ),
+          ];
+        }),
+      );
+      assert.deepEqual(
+        [...new Set(colors)].filter((color) => !allowed.has(color)),
+        [],
+      );
+      assert.deepEqual(unexpectedAuthRequests, []);
+      assert.deepEqual(externalRequests, []);
+      assert.ok(
+        providerRequests.every((request) =>
+          supported.some(([id]) => id === (request.body.provider ?? request.body.providerId)),
+        ),
+      );
+      assert.deepEqual(errors, []);
+    },
+  );
+  console.log(
+    `Provider options browser: ${checks} checks passed (mocked auth availability and SDK requests; no live OAuth claimed).`,
+  );
+} finally {
+  await context.close();
+  await browser.close();
+}

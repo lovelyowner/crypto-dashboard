@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  Check,
   Copy,
   ExternalLink,
   KeyRound,
@@ -9,7 +8,7 @@ import {
   LogOut,
   ShieldCheck,
 } from "lucide-react";
-import { authClient, SOCIAL_PROVIDERS } from "@/lib/auth/client";
+import { authClient } from "@/lib/auth/client";
 import {
   isValidUsername,
   normalizeUsername,
@@ -27,6 +26,8 @@ import {
   cancelPasskeyCeremony,
   endPasskeyCeremony,
 } from "@/lib/auth/passkeys-browser";
+import { AccountProviders } from "./account-providers";
+import { socialProviderLabel, type SupportedSocialProviderId } from "@/lib/auth/providers";
 import "./account.css";
 
 type Configuration = {
@@ -231,15 +232,15 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     });
   };
 
-  const connect = (provider: string, linking: boolean) =>
+  const connect = (provider: SupportedSocialProviderId, linking: boolean) =>
     void run(async () => {
       const result = linking
         ? await authClient.linkSocial({
-            provider: provider as "google" | "discord" | "twitter",
+            provider,
             callbackURL: returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login",
           })
         : await authClient.signIn.social({
-            provider: provider as "google" | "discord" | "twitter",
+            provider,
             callbackURL: returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login",
             fetchOptions: { headers: { [SESSION_DURATION_HEADER]: sessionDuration } },
           });
@@ -248,58 +249,13 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     });
 
   const providerButtons = (linking: boolean) => (
-    <>
-      <div className="account-providers">
-        {SOCIAL_PROVIDERS.filter(
-          (provider) =>
-            provider.supported &&
-            configuration?.configured &&
-            configuration.providers[provider.providerId],
-        ).map((provider) => {
-          const connected = accounts.some((account) => account.providerId === provider.providerId);
-          if (linking && connected)
-            return (
-              <span className="account-provider-connected" key={provider.providerId}>
-                <Check size={14} /> {provider.label} connected
-              </span>
-            );
-          return (
-            <button
-              className="account-provider"
-              type="button"
-              key={provider.providerId}
-              disabled={busy}
-              onClick={() => connect(provider.providerId, linking)}
-              title={provider.label}
-            >
-              <span className="account-provider-mark" aria-hidden="true">
-                {provider.mark}
-              </span>
-              <span>
-                {provider.label}
-                <small>{linking ? "Connect account" : "Continue"}</small>
-              </span>
-              {connected && <Check size={15} />}
-            </button>
-          );
-        })}
-      </div>
-      <p className="account-provider-note">
-        {SOCIAL_PROVIDERS.some(
-          (provider) => provider.supported && !configuration?.providers[provider.providerId],
-        ) && (
-          <>
-            {SOCIAL_PROVIDERS.filter(
-              (provider) => provider.supported && !configuration?.providers[provider.providerId],
-            )
-              .map((provider) => provider.label)
-              .join(", ")}
-            : server setup required.{" "}
-          </>
-        )}
-        Bluesky, Fluxer, and Stoat sign-in are not integrated.
-      </p>
-    </>
+    <AccountProviders
+      configuration={configuration}
+      accounts={accounts}
+      linking={linking}
+      busy={busy}
+      onConnect={connect}
+    />
   );
 
   return (
@@ -335,8 +291,8 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       )}
       {configuration && !configuration.configured && (
         <p className="account-message account-error" role="alert">
-          The account service needs its production database, signing secret, and HTTPS origin
-          configured.
+          The account service needs a database, signing secret, and HTTPS origin for this
+          deployment. Preview deployments use separate preview settings.
         </p>
       )}
       {notice && (
@@ -547,70 +503,73 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               sign-in method if available.
             </p>
           )}
-          {!challenge && mode === "login" && (
+          {!challenge && (mode === "login" || mode === "signup") && (
             <>
               <div className="account-divider">OR CONTINUE WITH</div>
-              {configuration?.configured && configuration.passkeys && passkeySupported && (
-                <>
-                  <button
-                    type="button"
-                    className="account-secondary account-passkey-signin"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        const controller = beginPasskeyCeremony();
-                        passkeyOperation.current = controller;
-                        setPasskeyBusy(true);
-                        try {
-                          const result = await authClient.signIn.passkey({
-                            fetchOptions: {
-                              signal: controller.signal,
-                              headers: {
-                                [SESSION_DURATION_HEADER]: sessionDuration,
-                                "x-fathom-remember-me": String(rememberMe),
-                              },
-                            },
-                          });
-                          if (controller.signal.aborted) return;
-                          if (result.error)
-                            throw new Error(
-                              result.error.message ||
-                                "Passkey sign-in was cancelled. Retry or use another method.",
-                            );
-                          if (
-                            (result.data as { twoFactorRedirect?: boolean } | null)
-                              ?.twoFactorRedirect
-                          ) {
-                            setChallenge(true);
-                            return;
-                          }
-                          await refetch();
-                          setNotice("Signed in with your passkey.");
-                        } finally {
-                          if (passkeyOperation.current === controller)
-                            passkeyOperation.current = null;
-                          endPasskeyCeremony(controller);
-                          setPasskeyBusy(false);
-                        }
-                      })
-                    }
-                  >
-                    <KeyRound size={15} /> Sign in with a passkey
-                  </button>
-                  {passkeyBusy && (
+              {mode === "login" &&
+                configuration?.configured &&
+                configuration.passkeys &&
+                passkeySupported && (
+                  <>
                     <button
-                      className="account-text-button"
                       type="button"
-                      onClick={() => {
-                        passkeyOperation.current?.abort();
-                        cancelPasskeyCeremony();
-                      }}
+                      className="account-secondary account-passkey-signin"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          const controller = beginPasskeyCeremony();
+                          passkeyOperation.current = controller;
+                          setPasskeyBusy(true);
+                          try {
+                            const result = await authClient.signIn.passkey({
+                              fetchOptions: {
+                                signal: controller.signal,
+                                headers: {
+                                  [SESSION_DURATION_HEADER]: sessionDuration,
+                                  "x-fathom-remember-me": String(rememberMe),
+                                },
+                              },
+                            });
+                            if (controller.signal.aborted) return;
+                            if (result.error)
+                              throw new Error(
+                                result.error.message ||
+                                  "Passkey sign-in was cancelled. Retry or use another method.",
+                              );
+                            if (
+                              (result.data as { twoFactorRedirect?: boolean } | null)
+                                ?.twoFactorRedirect
+                            ) {
+                              setChallenge(true);
+                              return;
+                            }
+                            await refetch();
+                            setNotice("Signed in with your passkey.");
+                          } finally {
+                            if (passkeyOperation.current === controller)
+                              passkeyOperation.current = null;
+                            endPasskeyCeremony(controller);
+                            setPasskeyBusy(false);
+                          }
+                        })
+                      }
                     >
-                      Cancel passkey sign-in
+                      <KeyRound size={15} /> Sign in with a passkey
                     </button>
-                  )}
-                </>
-              )}
+                    {passkeyBusy && (
+                      <button
+                        className="account-text-button"
+                        type="button"
+                        onClick={() => {
+                          passkeyOperation.current?.abort();
+                          cancelPasskeyCeremony();
+                        }}
+                      >
+                        Cancel passkey sign-in
+                      </button>
+                    )}
+                  </>
+                )}
               {providerButtons(false)}
             </>
           )}
@@ -845,7 +804,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             .filter((account) => account.providerId !== "credential")
             .map((account) => (
               <div className="account-linked" key={account.id}>
-                <span>{account.providerId}</span>
+                <span>{socialProviderLabel(account.providerId)}</span>
                 <button
                   type="button"
                   className="account-text-button"

@@ -88,7 +88,8 @@ test("selected duration is enforced in real sessions, cookies, 2FA and backup-co
     .getSetCookie()
     .reverse()
     .find((line) => line.startsWith("fathom.session_token="));
-  assert.match(signupCookie!, /Max-Age=35\d\d/i);
+  const signupMaxAge = Number(signupCookie?.match(/(?:^|;\s*)Max-Age=(\d+)(?:;|$)/i)?.[1]);
+  assert.ok(signupMaxAge >= 3590 && signupMaxAge <= 3600, "Expected a one-hour session cookie");
   await request("/sign-out", {});
   const invalidDuration = await request(
     "/sign-in/email",

@@ -11,7 +11,7 @@ Watching public addresses and creating local wallets work without an account. Ac
 - TOTP protects email, username, and passkey sign-in. OAuth providers use their own MFA/security policies; the local authenticator does not add another challenge to OAuth callbacks.
 - Passkey sign-in and management use the official Better Auth WebAuthn adapter. Add, rename, list, and remove passkeys under Account → Security. Enrollment and changes require a session created within the last ten minutes. The authenticator must verify the user; an existing authenticator-app or backup-code challenge still follows passkey sign-in when enabled.
 - Choose an absolute session lifetime of one hour, one day (default), or seven days. The database records the deadline and activity never extends it. A checked “Remember me” option makes a persistent email/username login cookie; unchecked uses a browser-session cookie. Browser session restore can retain session cookies, but cannot extend the server deadline. The chosen duration also applies to social sign-in and persists across authenticator/backup-code verification. Standard TOTP settings remain fixed for authenticator compatibility.
-- Direct Google, Discord, and Twitter/X OAuth when configured. Explicit account linking requires proof through the provider; implicit merging of same-email accounts is disabled. Linking requires the same verified email on both accounts. The server prevents removal of the last sign-in method.
+- Direct Google, Discord, Twitter/X, GitHub, and Twitch OAuth when configured. Explicit account linking requires proof through the provider; implicit merging of same-email accounts is disabled. Linking requires the same verified email on both accounts. The server prevents removal of the last sign-in method.
 - Social accounts with a verified email may add an independent password after fresh authentication. Account recovery is independent of wallet key recovery.
 
 ## Development
@@ -68,8 +68,16 @@ Optional OAuth credentials:
 | Google    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`   | `/api/auth/callback/google`  |
 | Discord   | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | `/api/auth/callback/discord` |
 | Twitter/X | `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET` | `/api/auth/callback/twitter` |
+| GitHub    | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`   | `/api/auth/callback/github`  |
+| Twitch    | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`   | `/api/auth/callback/twitch`  |
 
 Register the complete HTTPS callback URL in each provider's developer console. Provider client secrets are server-only. The UI obtains only configured/not-configured flags from `/api/auth/config`.
+
+GitHub uses the installed Better Auth adapter with `read:user` and `user:email`, browser-bound OAuth state, and S256 PKCE. Twitch uses the installed adapter with `openid` and `user:read:email`, email-related ID-token claims, browser-bound state, and a server-side confidential authorization-code exchange. This Twitch adapter does not use PKCE and does not accept a client-supplied ID token as a sign-in credential. Both adapters preserve the provider's email-verification result. Missing provider email cannot create an account; addresses are never invented to bypass that requirement.
+
+Set provider credentials separately for Vercel Production and Preview, using separate provider applications when callback registration requires it. In particular, a GitHub OAuth application has a registered callback origin; a preview must register its own exact callback URL. Keep the preview database, authentication secret, and origin isolation described above. Accounts are linked only through an explicit provider ownership flow and the existing verified-local-email check; implicit email matching and linking different email addresses remain disabled. Authenticator protection for password/passkey sign-in, provider MFA, passkeys, and backup email/password recovery retain their existing behavior.
+
+Automated OAuth tests use local HTTP-response fixtures for the official adapters. They verify initiation, callbacks, browser state, and account-linking rules; successful login with a real GitHub or Twitch application still requires registered credentials and provider-side verification.
 
 For verification and password reset email, set `RESEND_API_KEY` and `AUTH_EMAIL_FROM` using a verified sending domain. Requests go to `https://api.resend.com/emails`. The secret must be available to this server's process; a proxy placeholder alone may not suit every deployment. Reset email requests use generic existence-neutral responses and revoke other sessions after a successful password reset.
 
@@ -77,6 +85,6 @@ Rate limits use the shared PostgreSQL `rateLimit` table, including atomic increm
 
 ## Integrations requiring further work
 
-Fluxer and Stoat OAuth endpoints vary by instance and have not been implemented. Bluesky uses AT Protocol OAuth and needs its own secure adapter rather than a guessed generic OAuth URL. These buttons explicitly show “Not integrated”. Google, Discord, and Twitter show “Setup required” until their server credentials exist.
+Fluxer and Stoat adapters are not implemented in this application. Bluesky uses AT Protocol OAuth and needs a dedicated adapter. Mastodon needs an instance-aware flow and a separate verified-email strategy because its normal account API does not provide email. Hey/Lens needs a wallet-identity integration. These services appear in capability notes; configured supported adapters get sign-in buttons. Provider profile links remain separate from account authentication.
 
 Yoti identity verification and service-held wallet keys are not enabled. Identity verification does not itself store or recover crypto keys. A custodial product requires a separately designed and reviewed key-management service. The application never sends locally generated wallet recovery phrases to its account service.
