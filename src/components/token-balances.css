@@ -1,0 +1,292 @@
+.token-balances {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid #ccc;
+  color: #666;
+  padding: 22px;
+  min-width: 0;
+  max-width: 100%;
+}
+.token-balances .token-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.token-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.token-balances h2 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+.token-balances p {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.token-heading p {
+  margin: 7px 0 0;
+  max-width: 650px;
+}
+.token-balances button {
+  background: #fff;
+  color: #666;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  min-height: 34px;
+  padding: 7px 10px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.token-balances button:hover {
+  color: #333;
+  border-color: #ccc;
+}
+.token-balances button:disabled {
+  color: #999;
+  cursor: default;
+}
+.token-balances :is(button, input, select):focus-visible {
+  outline: 2px solid #ccc;
+  outline-offset: 2px;
+}
+.token-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.token-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #999;
+  margin: 16px 0;
+}
+.token-balances .token-message {
+  color: #333;
+  border-left: 2px solid #ccc;
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+.token-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  margin: 12px 0;
+}
+.token-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: #666;
+  min-width: 0;
+}
+.token-balances :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.token-balances input::placeholder {
+  color: #999;
+}
+.token-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+.token-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+  color: #999;
+  margin-bottom: 14px;
+}
+.token-search input {
+  flex: 1;
+}
+.token-table-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.token-balances table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.token-balances th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #999;
+  font-weight: 500;
+  border-bottom: 1px solid #ccc;
+  padding: 10px 10px 10px 0;
+}
+.token-balances th:nth-child(1) {
+  width: 31%;
+}
+.token-balances th:nth-child(2) {
+  width: 28%;
+}
+.token-balances th:nth-child(3) {
+  width: 36%;
+}
+.token-balances th:nth-child(4) {
+  width: 5%;
+}
+.token-balances td {
+  vertical-align: top;
+  border-bottom: 1px solid #ccc;
+  padding: 15px 12px 15px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.token-balances td:last-child {
+  text-align: right;
+  padding-right: 0;
+}
+.token-balances td :is(strong, span, code) {
+  display: block;
+}
+.token-balances td strong {
+  color: #333;
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 500;
+}
+.token-balances td span {
+  margin-top: 4px;
+  color: #999;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.token-balances td code {
+  margin-top: 5px;
+  color: #666;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.token-balances td .token-orphan {
+  color: #666;
+}
+.token-balances .token-remove {
+  padding: 6px;
+  min-width: 30px;
+  min-height: 30px;
+}
+.token-balances .token-empty {
+  padding: 20px 0;
+  color: #999;
+}
+.token-balances .token-footnote {
+  color: #999;
+  font-size: 10px;
+  margin: 14px 0 0;
+}
+.token-balances .token-reset {
+  margin: 0 0 12px;
+}
+.token-backups {
+  border-top: 1px solid #ccc;
+  margin-top: 16px;
+  padding-top: 14px;
+  font-size: 12px;
+}
+.token-backups summary {
+  color: #666;
+  cursor: pointer;
+  width: fit-content;
+}
+.token-backups summary:focus-visible {
+  outline: 2px solid #ccc;
+  outline-offset: 2px;
+}
+.token-backups p {
+  max-width: 680px;
+  overflow-wrap: anywhere;
+}
+.token-backup-actions {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.token-backup-actions label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+}
+.token-backup-actions input[type="file"] {
+  max-width: 100%;
+}
+.token-backup-actions input::file-selector-button {
+  background: #fff;
+  color: #666;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 4px 7px;
+  margin-right: 8px;
+}
+.token-import-preview {
+  border: 1px solid #ccc;
+  padding: 12px;
+  margin-top: 14px;
+}
+.token-import-preview .token-import-name {
+  color: #333;
+}
+@media (max-width: 1000px) {
+  .token-balances .token-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .token-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .token-balances {
+    padding: 16px;
+  }
+  .token-balances table {
+    table-layout: auto;
+    min-width: 580px;
+  }
+  .token-balances th:nth-child(4) {
+    width: 35px;
+  }
+  .token-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

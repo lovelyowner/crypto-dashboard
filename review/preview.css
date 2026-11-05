@@ -1,0 +1,94 @@
+@import "../src/palette.css";
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #333;
+  background: #fff;
+  font-synthesis: none;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 36px 28px;
+}
+.preview-header {
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 22px;
+}
+.preview-eyebrow {
+  color: #666;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+h1 {
+  color: #333;
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 550;
+  margin: 12px 0;
+}
+.preview-header p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.preview-header .preview-explainer {
+  color: #666;
+  font-size: 12px;
+  max-width: 720px;
+}
+.preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 22px;
+}
+.preview-toolbar button,
+.preview-error-toggle {
+  color: #333;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px 13px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.preview-toolbar button[aria-pressed="true"] {
+  border-color: #ccc;
+  box-shadow: 0 0 0 1px #ccc;
+}
+.preview-toolbar button:focus-visible,
+.preview-error-toggle:focus-visible {
+  outline: 2px solid #ccc;
+  outline-offset: 3px;
+}
+.preview-error-toggle {
+  margin-top: 12px;
+}
+.preview-help,
+.preview-notice,
+.preview-footer {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #666;
+}
+.preview-notice {
+  border: 1px solid #ccc;
+  padding: 12px;
+  border-radius: 6px;
+}
+.preview-footer {
+  border-top: 1px solid #ccc;
+  padding-top: 18px;
+  margin-top: 28px;
+}
+@media (max-width: 600px) {
+  main {
+    padding: 22px 16px;
+  }
+  .preview-toolbar button {
+    flex-grow: 1;
+  }
+}

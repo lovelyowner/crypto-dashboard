@@ -1,9 +1,9 @@
-import { auth, authConfigured, authIsProduction } from "./auth/server";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
 import { getSql } from "./db";
 import { createProfileHandler } from "./profile-handler";
 import { createSqlProfileStore } from "./profile-store";
 
-const configuredUrl = process.env.BETTER_AUTH_URL?.trim();
+const configuredUrl = authOrigin;
 const allowedOrigins = configuredUrl
   ? [configuredUrl]
   : authIsProduction

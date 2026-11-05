@@ -384,7 +384,7 @@ try {
     assert(!raw.includes("seed-btc-travel"));
   });
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Follow the flow.", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Activity", exact: true }).waitFor();
   await check("tab and transaction filter choices survive page reload", async () => {
     assert.equal(
       await page.getByRole("combobox", { name: "Filter by network", exact: true }).inputValue(),
@@ -433,9 +433,7 @@ try {
   await page.getByRole("button", { name: "Activity", exact: true }).click();
   await page.getByRole("button", { name: "Reset view", exact: true }).click();
   await check("Reset view returns to Overview with default filters and sorting", async () => {
-    await page
-      .getByRole("heading", { name: "Your crypto, in perspective.", exact: true })
-      .waitFor();
+    await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
     assert.equal(
       await page.getByRole("combobox", { name: "Filter by network", exact: true }).inputValue(),
       "all",

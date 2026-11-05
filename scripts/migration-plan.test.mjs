@@ -73,6 +73,8 @@ test("account, rate-limit and profile migrations ship in order without descendin
       "0007_creator_contact.sql",
       "0008_creator_payments.sql",
       "0009_inbox_activity.sql",
+      "0010_contact_moderation.sql",
+      "0011_passkeys.sql",
     ],
   );
   assert.equal(

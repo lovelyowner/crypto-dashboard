@@ -2,6 +2,7 @@ import { handleAuthRequest } from "./auth/handler";
 import { handleProfileRequest } from "./profile.server";
 import { handleContactRequest } from "./contact.server";
 import { handlePaymentRequest } from "./payments.server";
+import { handleModerationRequest } from "./moderation.server";
 import { handlePublicationRequest, handlePublicProfileRequest } from "./publication.server";
 
 /** Shared same-origin API for the Node server and Vercel functions. */
@@ -21,6 +22,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     pathname.startsWith("/api/payments/")
   )
     response = await handlePaymentRequest(request);
+  else if (pathname === "/api/moderation" || pathname.startsWith("/api/moderation/"))
+    response = await handleModerationRequest(request);
   else if (pathname === "/api/profile/publication")
     response = await handlePublicationRequest(request);
   else if (pathname.startsWith("/api/public-profiles/"))

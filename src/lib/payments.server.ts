@@ -1,5 +1,10 @@
-import { auth, authConfigured, authIsProduction, getAuthEncryptionSecret } from "./auth/server";
-import { configuredAuthOrigin } from "./auth/configuration";
+import {
+  auth,
+  authConfigured,
+  authIsProduction,
+  authOrigin,
+  getAuthEncryptionSecret,
+} from "./auth/server";
 import { getSql } from "./db";
 import { createSqlContactStore } from "./contact-store";
 import { createSqlPaymentStore } from "./payment-store";
@@ -7,9 +12,7 @@ import { createPaymentHandler } from "./payment-handler";
 import { createEthereumPaymentVerifier } from "./ethereum-payment";
 import { createNowPaymentsClient } from "./nowpayments";
 
-const origin =
-  configuredAuthOrigin(process.env.BETTER_AUTH_URL?.trim(), authIsProduction) ??
-  "http://localhost:8080";
+const origin = authOrigin ?? "http://localhost:8080";
 const allowedOrigins = authIsProduction ? [origin] : [origin, "http://127.0.0.1:8080"];
 const ethereum = createEthereumPaymentVerifier();
 const nowpayments = createNowPaymentsClient();

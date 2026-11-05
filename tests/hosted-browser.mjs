@@ -158,6 +158,8 @@ async function runChecks() {
         assert.deepEqual(await response.json(), {
           configured: false,
           emailRecovery: false,
+          passkeys: false,
+          passkeyOrigin: "http://localhost:8080",
           providers: { google: false, discord: false, twitter: false },
           production: true,
         });
@@ -197,9 +199,7 @@ async function runChecks() {
     await check(
       "hosted browser bundle renders the dashboard and local profile editor",
       async () => {
-        await page
-          .getByRole("heading", { name: "Your crypto, in perspective.", exact: true })
-          .waitFor();
+        await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
         await page.getByRole("button", { name: "Profile", exact: true }).click();
         await page.getByLabel("Display name", { exact: true }).fill("Hosted creator 🪐");
         await page.getByRole("button", { name: "Save local draft", exact: true }).click();
@@ -228,18 +228,16 @@ async function runChecks() {
       );
     });
     await check(
-      "configured adapters need credentials and unsupported adapters are labeled honestly",
+      "unavailable social sign-in methods use compact honest capability notes",
       async () => {
-        for (const provider of ["Google", "Discord", "Twitter / X"]) {
-          const button = dialog.locator(".account-provider").filter({ hasText: provider });
-          assert.match(await button.textContent(), /Setup required/);
-          assert.equal(await button.isDisabled(), true);
-        }
-        for (const provider of ["Bluesky", "Fluxer", "Stoat"]) {
-          const button = dialog.locator(".account-provider").filter({ hasText: provider });
-          assert.match(await button.textContent(), /Not integrated/);
-          assert.equal(await button.isDisabled(), true);
-        }
+        assert.equal(await dialog.locator(".account-provider").count(), 0);
+        const note = await dialog.locator(".account-provider-note").textContent();
+        assert.match(note, /Google, Discord, Twitter \/ X: server setup required/);
+        assert.match(note, /Bluesky, Fluxer, and Stoat sign-in are not integrated/);
+        assert.equal(
+          await dialog.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),
+          0,
+        );
       },
     );
     await check("direct hosted login route opens the account panel", async () => {

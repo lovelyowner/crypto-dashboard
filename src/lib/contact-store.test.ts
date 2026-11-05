@@ -12,7 +12,9 @@ async function fixture(applyActivity = true) {
   for (const file of [
     "0006_public_profiles.sql",
     "0007_creator_contact.sql",
+    "0008_creator_payments.sql",
     ...(applyActivity ? ["0009_inbox_activity.sql"] : []),
+    "0010_contact_moderation.sql",
   ])
     await pg.exec(await readFile(new URL(`../../migrations/${file}`, import.meta.url), "utf8"));
   await pg.query('insert into "user"(id) values ($1),($2),($3)', ["owner", "sender", "other"]);

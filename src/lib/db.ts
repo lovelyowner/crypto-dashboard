@@ -1,16 +1,12 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
+import { resolveDeploymentConfiguration } from "./deployment-config";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
 
-// An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
-// "unset" — otherwise production would silently run on the PGLite fallback.
-const productionBuild =
-  import.meta.env?.PROD === true ||
-  process.env.NODE_ENV === "production" ||
-  process.env.VERCEL === "1";
-const rawDatabaseUrl = typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
-const databaseUrl = rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const deployment = resolveDeploymentConfiguration(process.env, import.meta.env?.PROD === true);
+const productionBuild = deployment.production;
+const databaseUrl = deployment.databaseUrl;
 
 /**
  * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured

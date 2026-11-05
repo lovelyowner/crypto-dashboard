@@ -8,12 +8,17 @@ Watching public addresses and creating local wallets work without an account. Ac
 - Explicit username sign-in mode, including meaningful Unicode, punctuation, emoji, internal spaces, and `@`.
 - Usernames are case-sensitive and normalized to NFC before uniqueness checks. They contain 1–64 Unicode code points and cannot contain surrounding whitespace or control/invisible formatting characters. Passwords accept arbitrary character categories, 12–256 UTF-16 code units. Better Auth's built-in scrypt password hashing applies Unicode NFKC normalization.
 - Authenticator enrollment using a manual secret or `otpauth:` link. Activation requires a valid six-digit RFC6238 code. Standard codes rotate every 30 seconds. Ten encrypted, single-use backup codes containing 16 random alphanumeric characters support authenticator recovery. Generating new backup codes invalidates the previous set.
-- TOTP protects email and username sign-in. OAuth providers use their own MFA/security policies; the local authenticator does not add another challenge to OAuth callbacks.
+- TOTP protects email, username, and passkey sign-in. OAuth providers use their own MFA/security policies; the local authenticator does not add another challenge to OAuth callbacks.
+- Passkey sign-in and management use the official Better Auth WebAuthn adapter. Add, rename, list, and remove passkeys under Account → Security. Enrollment and changes require a session created within the last ten minutes. The authenticator must verify the user; an existing authenticator-app or backup-code challenge still follows passkey sign-in when enabled.
 - Choose an absolute session lifetime of one hour, one day (default), or seven days. The database records the deadline and activity never extends it. A checked “Remember me” option makes a persistent email/username login cookie; unchecked uses a browser-session cookie. Browser session restore can retain session cookies, but cannot extend the server deadline. The chosen duration also applies to social sign-in and persists across authenticator/backup-code verification. Standard TOTP settings remain fixed for authenticator compatibility.
 - Direct Google, Discord, and Twitter/X OAuth when configured. Explicit account linking requires proof through the provider; implicit merging of same-email accounts is disabled. Linking requires the same verified email on both accounts. The server prevents removal of the last sign-in method.
 - Social accounts with a verified email may add an independent password after fresh authentication. Account recovery is independent of wallet key recovery.
 
 ## Development
+
+Passkeys are bound to the exact `BETTER_AUTH_URL` origin and its hostname as relying-party ID. Use HTTPS in production and `http://localhost:8080` for local passkey testing. A different hostname, origin, or app domain needs separately enrolled credentials; use another existing sign-in method to access the account. Browser/device support is required. Passkeys recover account access, never wallet recovery phrases.
+
+The WebAuthn security checks in `npm test` use Chromium with a virtual authenticator and actual local HTTP ceremonies. Install Playwright Chromium or set `CHROMIUM_PATH` to an installed Chromium binary. `npm run test:passkeys` checks the full app UI against a running server at its configured origin. These tests do not enroll credentials on a real personal device.
 
 `npm run dev` starts the app on port 8080. PGLite stores local account data under `.data/fathom` (or `PGLITE_DATA_DIR`). A private signing/encryption secret is generated at `.local/auth-secret` with owner-only file permissions, retained across local restarts. Do not commit, share, or overwrite `.local`; existing encrypted authenticator data depends on its signing secret. Local passwords work without an email provider, but email verification and emailed password-reset links are unavailable until delivery is configured.
 
@@ -47,6 +52,14 @@ Set these on the server:
 - `BETTER_AUTH_URL`: exact public HTTPS origin, such as `https://dashboard.example.com`.
 
 Production authentication fails closed with HTTP 503 if these are missing. Building the client application does not require production credentials. Run `node scripts/migrate.mjs` with `DATABASE_URL` configured before serving production requests. It applies all `migrations/*.sql` in order and records successful migrations transactionally. Development PGLite applies the same files on startup.
+
+Vercel preview deployments use separate credentials. Whenever `VERCEL=1` and `VERCEL_ENV` is not exactly `production` (including an unset value), the server and build-time migrator ignore generic `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL`. Account services remain unavailable and migrations are skipped unless all three preview variables are valid:
+
+- `PREVIEW_DATABASE_URL`: an isolated preview PostgreSQL database, never the production database.
+- `PREVIEW_BETTER_AUTH_SECRET`: a separate stable random secret of at least 32 characters.
+- `PREVIEW_BETTER_AUTH_URL`: the exact HTTPS preview origin, with no path, query, or credentials.
+
+Scope these variables to the Vercel Preview environment. Use a stable preview URL and enroll preview passkeys there; production passkeys remain bound to the production origin. An incomplete preview configuration cannot access or migrate a database. Local development and Vercel Production retain the standard variables above. Avoid copying production credential values into preview-specific variables.
 
 Optional OAuth credentials:
 

@@ -45,7 +45,7 @@
 .profile-wallet-confirm > input {
   flex-shrink: 0;
   margin: 3px 0 0;
-  accent-color: var(--ui-text-2);
+  accent-color: var(--ui-icon);
 }
 .profile-wallet-option > span {
   display: block;

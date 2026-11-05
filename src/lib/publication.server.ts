@@ -1,10 +1,9 @@
-import { auth, authConfigured, authIsProduction } from "./auth/server";
-import { configuredAuthOrigin } from "./auth/configuration";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
 import { getSql } from "./db";
 import { createPublicationHandlers } from "./publication-handler";
 import { createSqlPublicationStore } from "./publication-store";
 
-const origin = configuredAuthOrigin(process.env.BETTER_AUTH_URL?.trim(), authIsProduction);
+const origin = authOrigin;
 const handlers = createPublicationHandlers({
   configured: authConfigured,
   allowedOrigins: origin

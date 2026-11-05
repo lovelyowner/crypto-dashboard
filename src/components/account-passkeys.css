@@ -1,0 +1,20 @@
+.account-passkey-list {
+  display: grid;
+  gap: 12px;
+}
+.account-passkey {
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+.account-passkey .account-label {
+  margin: 0 0 8px;
+}
+.account-passkey small {
+  color: #999;
+  font-size: 11px;
+}
+.account-passkeys .account-actions {
+  align-items: center;
+}

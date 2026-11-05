@@ -1,7 +1,19 @@
 import { twoFactorClient, usernameClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { passkeyClient } from "@better-auth/passkey/client";
+import { passkeyRequestSignal } from "./passkeys-browser";
 
-export const authClient = createAuthClient({ plugins: [usernameClient(), twoFactorClient()] });
+export const authClient = createAuthClient({
+  plugins: [usernameClient(), twoFactorClient(), passkeyClient()],
+  fetchOptions: {
+    onRequest(context) {
+      // The official client passes per-call signals only to verification. Also
+      // cancel option generation before a stale account can open a native prompt.
+      const signal = passkeyRequestSignal();
+      if (signal && String(context.url).includes("/passkey/")) return { ...context, signal };
+    },
+  },
+});
 export const useSession = authClient.useSession;
 export const authEnabled = true;
 export { GROK_PROVIDERS, SOCIAL_PROVIDERS } from "./providers";

@@ -1,11 +1,11 @@
 import { createHmac } from "node:crypto";
-import { auth, authConfigured, authIsProduction } from "./auth/server";
-import { configuredAuthOrigin } from "./auth/configuration";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
 import { getSql } from "./db";
 import { createContactHandler } from "./contact-handler";
 import { createSqlContactStore, type ContactStore } from "./contact-store";
+import { handleModerationRequest } from "./moderation.server";
 
-const origin = configuredAuthOrigin(process.env.BETTER_AUTH_URL?.trim(), authIsProduction);
+const origin = authOrigin;
 // The proxy delays SQL acquisition until an actual configured request needs it.
 const store = new Proxy({} as ContactStore, {
   get(_target, name: keyof ContactStore) {
@@ -16,7 +16,7 @@ const store = new Proxy({} as ContactStore, {
     };
   },
 });
-export const handleContactRequest = createContactHandler({
+const handleContact = createContactHandler({
   configured: authConfigured,
   allowedOrigins: origin
     ? [origin]
@@ -41,3 +41,8 @@ export const handleContactRequest = createContactHandler({
     return createHmac("sha256", context.secret).update(ip).digest("hex");
   },
 });
+export function handleContactRequest(request: Request): Promise<Response> {
+  if (/^\/api\/inbox\/[^/]+\/(moderation|reports)$/.test(new URL(request.url).pathname))
+    return handleModerationRequest(request);
+  return handleContact(request);
+}

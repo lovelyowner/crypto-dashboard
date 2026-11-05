@@ -18,6 +18,8 @@ import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiInboxIdRouteImport } from './routes/api/inbox/$id'
+import { Route as ApiModerationAccessRouteImport } from './routes/api/moderation/access'
+import { Route as ApiModerationReportsRouteImport } from './routes/api/moderation/reports'
 import { Route as ApiPaymentsIdRouteImport } from './routes/api/payments/$id'
 import { Route as ApiProfileContactRouteImport } from './routes/api/profile.contact'
 import { Route as ApiProfilePaymentsRouteImport } from './routes/api/profile.payments'
@@ -25,7 +27,10 @@ import { Route as ApiProfilePublicationRouteImport } from './routes/api/profile.
 import { Route as ApiPublicProfilesHandleRouteImport } from './routes/api/public-profiles/$handle'
 import { Route as ApiCreatorsHandleContactRouteImport } from './routes/api/creators/$handle.contact'
 import { Route as ApiCreatorsHandleMessagesRouteImport } from './routes/api/creators/$handle.messages'
+import { Route as ApiInboxIdModerationRouteImport } from './routes/api/inbox/$id.moderation'
 import { Route as ApiInboxIdRepliesRouteImport } from './routes/api/inbox/$id.replies'
+import { Route as ApiInboxIdReportsRouteImport } from './routes/api/inbox/$id.reports'
+import { Route as ApiModerationReportsIdRouteImport } from './routes/api/moderation/reports/$id'
 import { Route as ApiPaymentsIdVerifyRouteImport } from './routes/api/payments/$id.verify'
 import { Route as ApiPaymentsNowpaymentsWebhookCredentialIdRouteImport } from './routes/api/payments/nowpayments.webhook.$credentialId'
 
@@ -74,6 +79,16 @@ const ApiInboxIdRoute = ApiInboxIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiInboxRoute,
 } as any)
+const ApiModerationAccessRoute = ApiModerationAccessRouteImport.update({
+  id: '/api/moderation/access',
+  path: '/api/moderation/access',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiModerationReportsRoute = ApiModerationReportsRouteImport.update({
+  id: '/api/moderation/reports',
+  path: '/api/moderation/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPaymentsIdRoute = ApiPaymentsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -111,10 +126,25 @@ const ApiCreatorsHandleMessagesRoute =
     path: '/api/creators/$handle/messages',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiInboxIdModerationRoute = ApiInboxIdModerationRouteImport.update({
+  id: '/moderation',
+  path: '/moderation',
+  getParentRoute: () => ApiInboxIdRoute,
+} as any)
 const ApiInboxIdRepliesRoute = ApiInboxIdRepliesRouteImport.update({
   id: '/replies',
   path: '/replies',
   getParentRoute: () => ApiInboxIdRoute,
+} as any)
+const ApiInboxIdReportsRoute = ApiInboxIdReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => ApiInboxIdRoute,
+} as any)
+const ApiModerationReportsIdRoute = ApiModerationReportsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiModerationReportsRoute,
 } as any)
 const ApiPaymentsIdVerifyRoute = ApiPaymentsIdVerifyRouteImport.update({
   id: '/verify',
@@ -138,6 +168,8 @@ export interface FileRoutesByFullPath {
   '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
+  '/api/moderation/access': typeof ApiModerationAccessRoute
+  '/api/moderation/reports': typeof ApiModerationReportsRouteWithChildren
   '/api/payments/$id': typeof ApiPaymentsIdRouteWithChildren
   '/api/profile/contact': typeof ApiProfileContactRoute
   '/api/profile/payments': typeof ApiProfilePaymentsRoute
@@ -145,7 +177,10 @@ export interface FileRoutesByFullPath {
   '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
   '/api/creators/$handle/contact': typeof ApiCreatorsHandleContactRoute
   '/api/creators/$handle/messages': typeof ApiCreatorsHandleMessagesRoute
+  '/api/inbox/$id/moderation': typeof ApiInboxIdModerationRoute
   '/api/inbox/$id/replies': typeof ApiInboxIdRepliesRoute
+  '/api/inbox/$id/reports': typeof ApiInboxIdReportsRoute
+  '/api/moderation/reports/$id': typeof ApiModerationReportsIdRoute
   '/api/payments/$id/verify': typeof ApiPaymentsIdVerifyRoute
   '/api/payments/nowpayments/webhook/$credentialId': typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
 }
@@ -159,6 +194,8 @@ export interface FileRoutesByTo {
   '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
+  '/api/moderation/access': typeof ApiModerationAccessRoute
+  '/api/moderation/reports': typeof ApiModerationReportsRouteWithChildren
   '/api/payments/$id': typeof ApiPaymentsIdRouteWithChildren
   '/api/profile/contact': typeof ApiProfileContactRoute
   '/api/profile/payments': typeof ApiProfilePaymentsRoute
@@ -166,7 +203,10 @@ export interface FileRoutesByTo {
   '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
   '/api/creators/$handle/contact': typeof ApiCreatorsHandleContactRoute
   '/api/creators/$handle/messages': typeof ApiCreatorsHandleMessagesRoute
+  '/api/inbox/$id/moderation': typeof ApiInboxIdModerationRoute
   '/api/inbox/$id/replies': typeof ApiInboxIdRepliesRoute
+  '/api/inbox/$id/reports': typeof ApiInboxIdReportsRoute
+  '/api/moderation/reports/$id': typeof ApiModerationReportsIdRoute
   '/api/payments/$id/verify': typeof ApiPaymentsIdVerifyRoute
   '/api/payments/nowpayments/webhook/$credentialId': typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
 }
@@ -181,6 +221,8 @@ export interface FileRoutesById {
   '/u/$handle': typeof UHandleRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
+  '/api/moderation/access': typeof ApiModerationAccessRoute
+  '/api/moderation/reports': typeof ApiModerationReportsRouteWithChildren
   '/api/payments/$id': typeof ApiPaymentsIdRouteWithChildren
   '/api/profile/contact': typeof ApiProfileContactRoute
   '/api/profile/payments': typeof ApiProfilePaymentsRoute
@@ -188,7 +230,10 @@ export interface FileRoutesById {
   '/api/public-profiles/$handle': typeof ApiPublicProfilesHandleRoute
   '/api/creators/$handle/contact': typeof ApiCreatorsHandleContactRoute
   '/api/creators/$handle/messages': typeof ApiCreatorsHandleMessagesRoute
+  '/api/inbox/$id/moderation': typeof ApiInboxIdModerationRoute
   '/api/inbox/$id/replies': typeof ApiInboxIdRepliesRoute
+  '/api/inbox/$id/reports': typeof ApiInboxIdReportsRoute
+  '/api/moderation/reports/$id': typeof ApiModerationReportsIdRoute
   '/api/payments/$id/verify': typeof ApiPaymentsIdVerifyRoute
   '/api/payments/nowpayments/webhook/$credentialId': typeof ApiPaymentsNowpaymentsWebhookCredentialIdRoute
 }
@@ -204,6 +249,8 @@ export interface FileRouteTypes {
     | '/u/$handle'
     | '/api/auth/$'
     | '/api/inbox/$id'
+    | '/api/moderation/access'
+    | '/api/moderation/reports'
     | '/api/payments/$id'
     | '/api/profile/contact'
     | '/api/profile/payments'
@@ -211,7 +258,10 @@ export interface FileRouteTypes {
     | '/api/public-profiles/$handle'
     | '/api/creators/$handle/contact'
     | '/api/creators/$handle/messages'
+    | '/api/inbox/$id/moderation'
     | '/api/inbox/$id/replies'
+    | '/api/inbox/$id/reports'
+    | '/api/moderation/reports/$id'
     | '/api/payments/$id/verify'
     | '/api/payments/nowpayments/webhook/$credentialId'
   fileRoutesByTo: FileRoutesByTo
@@ -225,6 +275,8 @@ export interface FileRouteTypes {
     | '/u/$handle'
     | '/api/auth/$'
     | '/api/inbox/$id'
+    | '/api/moderation/access'
+    | '/api/moderation/reports'
     | '/api/payments/$id'
     | '/api/profile/contact'
     | '/api/profile/payments'
@@ -232,7 +284,10 @@ export interface FileRouteTypes {
     | '/api/public-profiles/$handle'
     | '/api/creators/$handle/contact'
     | '/api/creators/$handle/messages'
+    | '/api/inbox/$id/moderation'
     | '/api/inbox/$id/replies'
+    | '/api/inbox/$id/reports'
+    | '/api/moderation/reports/$id'
     | '/api/payments/$id/verify'
     | '/api/payments/nowpayments/webhook/$credentialId'
   id:
@@ -246,6 +301,8 @@ export interface FileRouteTypes {
     | '/u/$handle'
     | '/api/auth/$'
     | '/api/inbox/$id'
+    | '/api/moderation/access'
+    | '/api/moderation/reports'
     | '/api/payments/$id'
     | '/api/profile/contact'
     | '/api/profile/payments'
@@ -253,7 +310,10 @@ export interface FileRouteTypes {
     | '/api/public-profiles/$handle'
     | '/api/creators/$handle/contact'
     | '/api/creators/$handle/messages'
+    | '/api/inbox/$id/moderation'
     | '/api/inbox/$id/replies'
+    | '/api/inbox/$id/reports'
+    | '/api/moderation/reports/$id'
     | '/api/payments/$id/verify'
     | '/api/payments/nowpayments/webhook/$credentialId'
   fileRoutesById: FileRoutesById
@@ -267,6 +327,8 @@ export interface RootRouteChildren {
   ApiProfileRoute: typeof ApiProfileRouteWithChildren
   UHandleRoute: typeof UHandleRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiModerationAccessRoute: typeof ApiModerationAccessRoute
+  ApiModerationReportsRoute: typeof ApiModerationReportsRouteWithChildren
   ApiPublicProfilesHandleRoute: typeof ApiPublicProfilesHandleRoute
   ApiCreatorsHandleContactRoute: typeof ApiCreatorsHandleContactRoute
   ApiCreatorsHandleMessagesRoute: typeof ApiCreatorsHandleMessagesRoute
@@ -337,6 +399,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiInboxIdRouteImport
       parentRoute: typeof ApiInboxRoute
     }
+    '/api/moderation/access': {
+      id: '/api/moderation/access'
+      path: '/api/moderation/access'
+      fullPath: '/api/moderation/access'
+      preLoaderRoute: typeof ApiModerationAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/moderation/reports': {
+      id: '/api/moderation/reports'
+      path: '/api/moderation/reports'
+      fullPath: '/api/moderation/reports'
+      preLoaderRoute: typeof ApiModerationReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/payments/$id': {
       id: '/api/payments/$id'
       path: '/$id'
@@ -386,12 +462,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCreatorsHandleMessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/inbox/$id/moderation': {
+      id: '/api/inbox/$id/moderation'
+      path: '/moderation'
+      fullPath: '/api/inbox/$id/moderation'
+      preLoaderRoute: typeof ApiInboxIdModerationRouteImport
+      parentRoute: typeof ApiInboxIdRoute
+    }
     '/api/inbox/$id/replies': {
       id: '/api/inbox/$id/replies'
       path: '/replies'
       fullPath: '/api/inbox/$id/replies'
       preLoaderRoute: typeof ApiInboxIdRepliesRouteImport
       parentRoute: typeof ApiInboxIdRoute
+    }
+    '/api/inbox/$id/reports': {
+      id: '/api/inbox/$id/reports'
+      path: '/reports'
+      fullPath: '/api/inbox/$id/reports'
+      preLoaderRoute: typeof ApiInboxIdReportsRouteImport
+      parentRoute: typeof ApiInboxIdRoute
+    }
+    '/api/moderation/reports/$id': {
+      id: '/api/moderation/reports/$id'
+      path: '/$id'
+      fullPath: '/api/moderation/reports/$id'
+      preLoaderRoute: typeof ApiModerationReportsIdRouteImport
+      parentRoute: typeof ApiModerationReportsRoute
     }
     '/api/payments/$id/verify': {
       id: '/api/payments/$id/verify'
@@ -411,11 +508,15 @@ declare module '@tanstack/react-router' {
 }
 
 interface ApiInboxIdRouteChildren {
+  ApiInboxIdModerationRoute: typeof ApiInboxIdModerationRoute
   ApiInboxIdRepliesRoute: typeof ApiInboxIdRepliesRoute
+  ApiInboxIdReportsRoute: typeof ApiInboxIdReportsRoute
 }
 
 const ApiInboxIdRouteChildren: ApiInboxIdRouteChildren = {
+  ApiInboxIdModerationRoute: ApiInboxIdModerationRoute,
   ApiInboxIdRepliesRoute: ApiInboxIdRepliesRoute,
+  ApiInboxIdReportsRoute: ApiInboxIdReportsRoute,
 }
 
 const ApiInboxIdRouteWithChildren = ApiInboxIdRoute._addFileChildren(
@@ -477,6 +578,17 @@ const ApiProfileRouteWithChildren = ApiProfileRoute._addFileChildren(
   ApiProfileRouteChildren,
 )
 
+interface ApiModerationReportsRouteChildren {
+  ApiModerationReportsIdRoute: typeof ApiModerationReportsIdRoute
+}
+
+const ApiModerationReportsRouteChildren: ApiModerationReportsRouteChildren = {
+  ApiModerationReportsIdRoute: ApiModerationReportsIdRoute,
+}
+
+const ApiModerationReportsRouteWithChildren =
+  ApiModerationReportsRoute._addFileChildren(ApiModerationReportsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HandleRoute: HandleRoute,
@@ -486,6 +598,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProfileRoute: ApiProfileRouteWithChildren,
   UHandleRoute: UHandleRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiModerationAccessRoute: ApiModerationAccessRoute,
+  ApiModerationReportsRoute: ApiModerationReportsRouteWithChildren,
   ApiPublicProfilesHandleRoute: ApiPublicProfilesHandleRoute,
   ApiCreatorsHandleContactRoute: ApiCreatorsHandleContactRoute,
   ApiCreatorsHandleMessagesRoute: ApiCreatorsHandleMessagesRoute,

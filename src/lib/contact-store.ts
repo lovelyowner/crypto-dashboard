@@ -46,9 +46,12 @@ export type PendingMessageInput = {
   anonymous: boolean;
   kind: ContactKind;
   text: string;
+  /** Server-session identity only; never included in anonymous contact DTOs. */
+  moderationActorId?: string | null;
 };
 export type FreeMessageInput = Omit<PendingMessageInput, "id" | "paymentId">;
 export interface ContactStore {
+  contactAllowed?(senderId: string, recipientId: string): Promise<boolean>;
   resolveRecipient(handle: string): Promise<ContactRecipient | null>;
   readConfiguration(userId: string): Promise<{
     handle: string | null;
@@ -59,6 +62,7 @@ export interface ContactStore {
   consumeRate(key: string, limit: number, now: number): Promise<boolean>;
   createFreeMessage(input: FreeMessageInput): Promise<StoredContactMessage | null>;
   createPendingMessage(input: PendingMessageInput): Promise<StoredContactMessage>;
+  discardPendingMessage?(messageId: string, paymentId: string): Promise<void>;
   completePendingMessage(messageId: string, paymentId: string): Promise<boolean>;
   readInternalMessage(id: string): Promise<StoredContactMessage | null>;
   listMessages(
@@ -224,6 +228,14 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
       )
     )[0] ?? null;
   return {
+    async contactAllowed(senderId, recipientId) {
+      const [row] = await sql.query<{ allowed: boolean }>(
+        `select not exists(select 1 from creator_contact_pairs where low_id=least($1::text,$2::text)
+         and high_id=greatest($1::text,$2::text) and (low_blocked or high_blocked)) as allowed`,
+        [senderId, recipientId],
+      );
+      return row.allowed;
+    },
     readConfiguration,
     async resolveRecipient(handle) {
       const rows = await sql.query<{
@@ -297,8 +309,8 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
       )
         throw new Error("Invalid pending sender");
       const rows = await sql.query<StoredContactMessage>(
-        `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status,payment_id,sender_read_at)
-        select $1,p.user_id,p.handle,$3,$4,$5,$6,$7,'pending',$8,case when $3::text is null then null else now() end from public_creator_profiles p where p.user_id=$2
+        `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status,payment_id,sender_read_at,moderation_actor_id)
+        select $1,p.user_id,p.handle,$3,$4,$5,$6,$7,'pending',$8,case when $3::text is null then null else now() end,$9 from public_creator_profiles p where p.user_id=$2
         returning ${messageColumns}`,
         [
           input.id,
@@ -309,10 +321,18 @@ export function createSqlContactStore(sql: Pick<Sql, "query">): ContactStore {
           input.kind,
           validateContactText(input.text),
           input.paymentId,
+          input.moderationActorId ?? input.senderId,
         ],
       );
       if (!rows[0]) throw new Error("Recipient not found");
       return rows[0];
+    },
+    async discardPendingMessage(id, paymentId) {
+      await sql.query(
+        `delete from creator_messages m where m.id=$1 and m.payment_id=$2 and m.payment_status='pending'
+         and not exists(select 1 from creator_payment_intents p where p.message_id=m.id)`,
+        [id, paymentId],
+      );
     },
     async completePendingMessage(id, paymentId) {
       const rows = await sql.query(

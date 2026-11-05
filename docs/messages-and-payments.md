@@ -10,7 +10,7 @@ In the profile's Donations section, **Choose wallets from this workspace** copie
 
 Publishing, updating, or unpublishing the page refreshes receiving-wallet choices automatically. **Reload settings** also refreshes them. Both preserve unsaved contact edits, including fees typed while a refresh is loading; only **Save contact settings** submits those edits. If a selected wallet is removed from the published page, settings show that unavailable selection and require choosing another published wallet or explicitly clearing it. The app never silently redirects payments to a different wallet.
 
-DM senders must sign in. Donation messages may use an account identity or appear as Anonymous to the creator. Anonymous hides the account name; blockchain transfers remain public and checkout providers retain their own records. Messages are private to the participants and stored by the account service; they are not end-to-end encrypted or part of public profile exports. Payment does not guarantee a reply.
+DM senders must sign in. Donation messages may use an account identity or appear as Anonymous to the creator. Anonymous hides the account name; blockchain transfers remain public and checkout providers retain their own records. Messages are stored by the account service and visible to participants. Reporting shares a snapshot of the selected message, its current replies, and report details with authorized reviewers. Messages are not end-to-end encrypted or part of public profile exports. Payment does not guarantee a reply.
 
 ## Direct Ethereum payments
 
@@ -38,11 +38,23 @@ The API implementation follows the [official NOWPayments JavaScript SDK](https:/
 
 ## Inbox and pending payments
 
+**Safety controls** on a conversation lets either participant block or unblock the other account, or save a report for spam, harassment, scams, or another reason. Blocking stops new signed-in messages, replies, and payment quotes in both directions. Existing history remains readable, and already-started payments remain verifiable and may complete. Blocking does not cancel or refund a payment.
+
+Anonymous notes may be reported, but a truly anonymous sender has no account identity to block. A known authenticated anonymous payer is checked privately without exposing its identity in contact, payment, or report responses. To stop anonymous notes altogether, disable donation messages in profile contact settings.
+
+Reports preserve the message and replies as they were at first submission; later replies are not added to that report. Only authenticated users listed in the server-only comma-separated `MODERATION_REVIEWER_IDS` setting can open **Staff moderation** and mark reports reviewed or dismissed. Leaving the setting empty enables no reviewers. A **Report saved** receipt records submission, not a promise that a person has reviewed it. Reviewers cannot browse ordinary private inboxes through this API.
+
 Open **Inbox** for received messages, sent conversations, and donation notes. The server checks participant ownership on every read and reply. Creator replies are free; incoming follow-ups respect the creator's current DM policy. Unpaid messages are absent from the recipient inbox. Signed-in senders can resume their own pending payments from **Inbox → Sent**.
 
 Conversations are ordered by their latest activity, with a preview of the latest reply. Newly verified paid messages use their delivery time; checking an already completed payment does not move it again. Unread badges are personal to the signed-in participant: a creator's reply can make a conversation in **Sent** unread, and a sender's follow-up can make it unread in **Received**. Opening a conversation marks only the activity returned to that participant as read. Counts exclude pending payments from the creator's inbox.
 
 While the inbox is open, lists and the selected conversation refresh every 30 seconds and when you return to the tab or reconnect. Automatic refresh pauses when the browser tab is hidden or offline, and keeps unsent reply text. **Refresh inbox** refreshes both the list and selected conversation. Refreshing returns the list to its latest page and shows a notice if older pages were loaded; the selected conversation stays open. Loading more messages can be retried after a failed request.
+
+Unsent replies stay with each conversation while the inbox remains open, including when switching conversations or folders. A **Draft** badge identifies them; **Discard draft** clears the selected reply, and a successful send clears it automatically. Drafts stay in memory only. Leaving the inbox, reloading, signing out, or losing authentication clears them.
+
+**Copy conversation** copies the loaded messages and replies as plain text with names and UTC dates. It excludes unsent drafts, other conversations, internal account IDs, and payment access tokens. The copied text contains private correspondence; sharing it is your choice.
+
+Use **Search loaded conversations** and **Unread only** to narrow the current folder. Search matches names, recipient handles, original messages, and latest replies already loaded in the browser; it does not search every reply or unloaded history. **Load more messages** expands that scope. Filters do not close the selected conversation or clear its draft, and folder changes reset the filters. Search terms are neither sent to the service nor saved.
 
 Anonymous payment receipt access stays in the current tab through an opaque capability token, never a URL or browser storage. Keep that tab open until confirmation. Ordinary bank/merchant links and other public crypto addresses remain external donation options; following a link or claiming to have paid does not unlock an in-app message.
 

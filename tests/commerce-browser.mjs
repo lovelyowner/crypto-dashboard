@@ -96,9 +96,7 @@ try {
   await ownerPage.goto(origin, { waitUntil: "domcontentloaded" });
   await ownerPage.getByLabel("Display name", { exact: true }).waitFor({ state: "attached" });
   await ownerPage.getByRole("button", { name: "Profile", exact: true }).click();
-  await ownerPage
-    .getByRole("heading", { name: "Your corner of the internet.", exact: true })
-    .waitFor();
+  await ownerPage.getByRole("heading", { name: "Profile", exact: true }).waitFor();
   const setup = ownerPage.locator(".profile-contact-settings");
   await setup.getByLabel("Direct messages", { exact: true }).waitFor();
   await setup.getByLabel("Direct messages", { exact: true }).selectOption("closed");

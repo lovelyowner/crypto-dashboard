@@ -239,6 +239,30 @@ try {
       assert.equal((await json(owner, "/api/inbox")).unreadCounts.received, 1);
     },
   );
+  await check("Copy conversation includes only the loaded transcript and preserves Unicode", async () => {
+    await ownerPage.evaluate(() => {
+      window.__copiedConversation = null;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text) => {
+            window.__copiedConversation = text;
+          },
+        },
+      });
+    });
+    await ownerInbox.getByRole("button", { name: "Copy conversation", exact: true }).click();
+    const copied = await ownerPage.evaluate(() => window.__copiedConversation);
+    assert.equal(typeof copied, "string");
+    for (const text of ["Original older conversation 🌙", "Activity sender 🪐", incoming, liveReply]) {
+      assert.ok(copied.includes(text), `Copied transcript includes ${text}`);
+    }
+    for (const text of [unsaved, "Original newer conversation 🪐", first.id, second.id]) {
+      assert.ok(!copied.includes(text), "Copied transcript excludes drafts, other threads, and IDs");
+    }
+    assert.equal(await draft.inputValue(), unsaved);
+    assert.equal(replyWrites, 0);
+  });
 
   await hidden(ownerPage, true);
   const hiddenReply = "This arrives while the inbox tab is hidden";
@@ -315,6 +339,7 @@ try {
       assert.equal(sent.unreadCounts.sent, 1);
       assert.equal((await json(owner, "/api/inbox")).messages[0].unread, false);
       assert.equal(await draft.inputValue(), "");
+      assert.equal(await ownerInbox.getByText("Draft", { exact: true }).count(), 0);
     },
   );
   const { page: senderPage, inbox: senderInbox } = await inboxPage(sender, "sent");
@@ -334,6 +359,46 @@ try {
     },
   );
   await senderPage.close();
+
+  const repliedRow = ownerInbox.locator(".creator-inbox-row").filter({ hasText: unsaved });
+  const secondRow = ownerInbox
+    .locator(".creator-inbox-row")
+    .filter({ hasText: "Original newer conversation 🪐" });
+  const firstDraft = "Unsent draft for the older conversation 🌙";
+  const secondDraft = "Separate unsent draft for the newer conversation 🪐";
+  const writesBeforeDraftNavigation = replyWrites;
+  await check("separate reply drafts survive conversation, Back, and folder navigation", async () => {
+    await draft.fill(firstDraft);
+    await repliedRow.getByText("Draft", { exact: true }).waitFor();
+    await secondRow.click();
+    assert.equal(await draft.inputValue(), "");
+    await draft.fill(secondDraft);
+    await ownerInbox.getByRole("button", { name: "Messages", exact: true }).click();
+    assert.equal(await draft.count(), 0);
+    await repliedRow.click();
+    assert.equal(await draft.inputValue(), firstDraft);
+    await ownerInbox.getByRole("tab", { name: "Sent", exact: true }).click();
+    await ownerInbox.getByText("No messages here yet", { exact: true }).waitFor();
+    await ownerInbox.getByRole("tab", { name: "Received", exact: true }).click();
+    await repliedRow.getByText("Draft", { exact: true }).waitFor();
+    await secondRow.getByText("Draft", { exact: true }).waitFor();
+    await secondRow.click();
+    assert.equal(await draft.inputValue(), secondDraft);
+    assert.equal(replyWrites, writesBeforeDraftNavigation);
+  });
+  await check("discarding a reply draft clears only that conversation", async () => {
+    await ownerInbox.getByRole("button", { name: "Discard draft", exact: true }).click();
+    assert.equal(await draft.inputValue(), "");
+    assert.equal(await secondRow.getByText("Draft", { exact: true }).count(), 0);
+    await repliedRow.getByText("Draft", { exact: true }).waitFor();
+    await repliedRow.click();
+    assert.equal(await draft.inputValue(), firstDraft);
+    await secondRow.click();
+    assert.equal(await draft.inputValue(), "");
+    await repliedRow.click();
+    assert.equal(await draft.inputValue(), firstDraft);
+    assert.equal(replyWrites, writesBeforeDraftNavigation);
+  });
 
   await ownerPage.setViewportSize({ width: 390, height: 844 });
   await check(

@@ -5,6 +5,7 @@ import { paymentFixture } from "./payment-store.test";
 import { createPaymentHandler, type PaymentHandlerDependencies } from "./payment-handler";
 import { DEFAULT_CONTACT_SETTINGS } from "./creator-contact";
 import { decryptPaymentCredentials } from "./payment-credentials";
+import { createSqlModerationStore } from "./moderation-store";
 
 async function setup() {
   const f = await paymentFixture();
@@ -19,7 +20,8 @@ async function setup() {
   });
   let nativeState: "pending" | "confirmed" | "rejected" = "pending",
     providerState = "partially_paid",
-    getProviderCalls = 0;
+    getProviderCalls = 0,
+    recipientChecks = 0;
   const invoiceOrders = new Map<string, { amount: string }>();
   const dependencies: PaymentHandlerDependencies = {
     configured: true,
@@ -42,7 +44,9 @@ async function setup() {
         : null;
     },
     ethereum: {
-      assertEthereumRecipient: async () => {},
+      assertEthereumRecipient: async () => {
+        recipientChecks++;
+      },
       verifyEthereumPayment: async (intent, hash) =>
         nativeState === "confirmed"
           ? {
@@ -122,8 +126,76 @@ async function setup() {
       providerState = value;
     },
     providerCalls: () => getProviderCalls,
+    recipientChecks: () => recipientChecks,
   };
 }
+
+test("blocks reject new quotes before RPC while old pending receipts still verify and deliver", async () => {
+  const f = await setup();
+  try {
+    const old = await f.request("/api/payments", {
+      method: "POST",
+      user: "sender",
+      body: f.input(),
+    });
+    assert.equal(old.response.status, 201);
+    assert.equal(f.recipientChecks(), 1);
+    const row = (await f.store.read(old.data.payment.id))!;
+    const moderation = createSqlModerationStore(f.sql);
+    await moderation.setBlocked("sender", row.messageId, true);
+    const request = await f.request("/api/payments", {
+      method: "POST",
+      user: "sender",
+      body: f.input(),
+    });
+    assert.equal(request.response.status, 403);
+    const anonymous = await f.request("/api/payments", {
+      method: "POST",
+      user: "sender",
+      body: f.input({ kind: "donation", anonymous: true, amount: "0.01" }),
+    });
+    assert.equal(anonymous.response.status, 403);
+    assert.equal(f.recipientChecks(), 1);
+    f.setNative("confirmed");
+    const verified = await f.request(`/api/payments/${row.id}/verify`, {
+      method: "POST",
+      user: "sender",
+      body: { transactionHash: `0x${"c".repeat(64)}` },
+    });
+    assert.equal(verified.response.status, 200);
+    assert.equal(verified.data.payment.status, "paid");
+    assert.equal(
+      (await f.contacts.readThread("owner", row.messageId))?.message.paymentStatus,
+      "paid",
+    );
+    assert.equal((await f.pg.query("select * from creator_payment_proofs")).rows.length, 1);
+  } finally {
+    await f.pg.close();
+  }
+});
+
+test("a block between draft and payment intent removes only the orphan and creates no quote", async () => {
+  const f = await setup();
+  try {
+    const moderation = createSqlModerationStore(f.sql);
+    const createPending = f.contacts.createPendingMessage;
+    f.contacts.createPendingMessage = async (input) => {
+      const message = await createPending(input);
+      await moderation.setBlocked("sender", message.id, true);
+      return message;
+    };
+    const response = await f.request("/api/payments", {
+      method: "POST",
+      user: "sender",
+      body: f.input(),
+    });
+    assert.equal(response.response.status, 403);
+    assert.equal((await f.pg.query("select * from creator_payment_intents")).rows.length, 0);
+    assert.equal((await f.pg.query("select * from creator_messages")).rows.length, 0);
+  } finally {
+    await f.pg.close();
+  }
+});
 
 test("payment receipts preserve anonymous identity, owner authorization and pending-message privacy", async () => {
   const f = await setup();

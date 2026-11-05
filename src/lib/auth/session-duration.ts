@@ -1,6 +1,9 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { expireCookie } from "better-auth/cookies";
+// Kept browser-safe; importing the server plugin here would pull WebAuthn verification into clients.
+const passkeyLogin = "/passkey/verify-authentication";
+const passkeyRememberHeader = "x-fathom-remember-me";
 import {
   DEFAULT_SESSION_DURATION,
   SESSION_DURATION_HEADER,
@@ -8,7 +11,13 @@ import {
 } from "./policy";
 
 const startsLogin = (path = "") =>
-  ["/sign-in/email", "/sign-in/username", "/sign-in/social", "/sign-up/email"].includes(path);
+  [
+    "/sign-in/email",
+    "/sign-in/username",
+    "/sign-in/social",
+    "/sign-up/email",
+    passkeyLogin,
+  ].includes(path);
 const completesLogin = (path = "") =>
   startsLogin(path) || path.startsWith("/callback/") || path.startsWith("/two-factor/verify-");
 
@@ -62,6 +71,17 @@ export function sessionDurationPlugin(): BetterAuthPlugin {
           matcher: (ctx) => completesLogin(ctx.path) || ctx.path === "/sign-out",
           handler: createAuthMiddleware(async (ctx) => {
             const session = ctx.context.newSession;
+            if (ctx.path === passkeyLogin) {
+              const remember = ctx.headers?.get(passkeyRememberHeader) === "true";
+              if (remember) expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+              else
+                await ctx.setSignedCookie(
+                  ctx.context.authCookies.dontRememberToken.name,
+                  "true",
+                  ctx.context.secret,
+                  ctx.context.authCookies.dontRememberToken.attributes,
+                );
+            }
             if (!session && startsLogin(ctx.path)) {
               const result = ctx.context.returned;
               if (
@@ -85,7 +105,9 @@ export function sessionDurationPlugin(): BetterAuthPlugin {
             expireCookie(ctx, ctx.context.createAuthCookie("login_duration", { maxAge: 600 }));
             if (!session) return;
             const dontRemember = startsLogin(ctx.path)
-              ? ctx.body?.rememberMe === false
+              ? ctx.path === passkeyLogin
+                ? ctx.headers?.get(passkeyRememberHeader) !== "true"
+                : ctx.body?.rememberMe === false
               : Boolean(
                   await ctx.getSignedCookie(
                     ctx.context.authCookies.dontRememberToken.name,

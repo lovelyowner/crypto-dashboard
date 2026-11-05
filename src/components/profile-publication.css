@@ -144,7 +144,7 @@
 .profile-publication-consent > input {
   flex-shrink: 0;
   margin: 2px 0 0;
-  accent-color: var(--ui-text-2);
+  accent-color: var(--ui-icon);
 }
 .profile-publication-feedback {
   display: flex;

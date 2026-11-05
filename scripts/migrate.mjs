@@ -3,25 +3,30 @@
  * Deploy-time database migrator (node-postgres, `pg`).
  *
  * Runs during `npm run build:vercel` — on every Vercel deploy — applying pending files
- * in ../migrations to DATABASE_URL. Each file is applied in one transaction and
+ * in ../migrations to the selected deployment database. Each file is applied in one transaction and
  * recorded in a `_migrations` table, so it runs once and is safe to re-run.
  *
  * The read is non-recursive, so the opt-in auth schema under migrations/auth/
  * is not applied to an app that never asked for sign-in.
  *
- * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
- * the same files at startup instead (see src/lib/db.ts).
+ * Vercel non-production builds require a complete PREVIEW_* account configuration;
+ * they never use generic DATABASE_URL/BETTER_AUTH_* values. Missing configuration
+ * skips migrations. Local development migrates PGLite on startup (src/lib/db.ts).
  */
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
+import { resolveDeploymentConfiguration } from "../src/lib/deployment-config.ts";
 
-const databaseUrl = process.env.DATABASE_URL;
+const deployment = resolveDeploymentConfiguration(process.env);
+const databaseUrl = deployment.databaseUrl;
 if (!databaseUrl) {
   console.log(
-    "[migrate] DATABASE_URL not set — skipping. Hosted accounts remain unavailable; local development migrates PGLite on startup.",
+    deployment.preview
+      ? "[migrate] Complete PREVIEW_DATABASE_URL/PREVIEW_BETTER_AUTH_SECRET/PREVIEW_BETTER_AUTH_URL configuration not set — skipping isolated preview migrations."
+      : "[migrate] DATABASE_URL not set — skipping. Hosted accounts remain unavailable; local development migrates PGLite on startup.",
   );
   process.exit(0);
 }

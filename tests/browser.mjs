@@ -68,10 +68,7 @@ try {
   await page.goto(baseURL, { waitUntil: "networkidle" });
   await page.waitForSelector(".address-empty");
   await check("desktop dashboard renders empty local workspace", async () =>
-    assert.equal(
-      await page.getByRole("heading", { name: "Your crypto, in perspective." }).count(),
-      1,
-    ),
+    assert.equal(await page.getByRole("heading", { name: "Overview" }).count(), 1),
   );
   await page.screenshot({ path: "screenshots/new-desktop-empty.png", fullPage: true });
   await page.getByRole("button", { name: "Add address", exact: true }).click();
@@ -221,7 +218,7 @@ try {
   await page.getByRole("button", { name: "Toggle navigation" }).click();
   await page.getByRole("button", { name: "Networks", exact: true }).click();
   await check("mobile sidebar navigates and closes", async () => {
-    await page.getByRole("heading", { name: "Explore the networks." }).waitFor();
+    await page.getByRole("heading", { name: "Networks", exact: true }).waitFor();
     assert.equal(await page.locator(".sidebar.is-open").count(), 0);
   });
   await page.waitForFunction(

@@ -1,0 +1,113 @@
+.conversation-moderation,
+.moderation-review-panel {
+  margin: 0 0 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-background);
+  color: var(--ui-text-2);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.conversation-moderation > summary,
+.moderation-review-panel > summary {
+  padding: 10px 12px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+}
+.conversation-moderation summary svg,
+.moderation-review-panel summary svg {
+  display: inline;
+  margin: 0 5px;
+  vertical-align: middle;
+}
+.conversation-moderation summary:focus-visible,
+.moderation-review-panel summary:focus-visible,
+.conversation-moderation select:focus-visible,
+.moderation-review-panel select:focus-visible {
+  outline: 2px solid var(--ui-border);
+  outline-offset: 3px;
+}
+.conversation-moderation-content,
+.moderation-review-content {
+  padding: 0 12px 12px;
+  min-width: 0;
+}
+.conversation-moderation p,
+.moderation-review-panel p {
+  margin: 8px 0 12px;
+  overflow-wrap: anywhere;
+}
+.conversation-moderation h4,
+.moderation-review-panel h4,
+.moderation-review-panel h5 {
+  margin: 0 0 8px;
+  color: var(--ui-text-3);
+  font-weight: 550;
+  font-size: 11px;
+}
+.conversation-moderation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.conversation-moderation-confirm,
+.conversation-moderation-report {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+}
+.conversation-moderation-report {
+  display: grid;
+  gap: 7px;
+}
+.conversation-moderation-report label {
+  color: var(--ui-text-3);
+}
+.conversation-moderation select,
+.conversation-moderation textarea,
+.moderation-review-panel select {
+  color: var(--ui-text-3);
+  background: var(--ui-background);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  padding: 9px;
+  font: inherit;
+  max-width: 100%;
+  min-width: 0;
+}
+.conversation-moderation select:disabled,
+.moderation-review-panel select:disabled {
+  color: var(--ui-text-1);
+}
+.conversation-moderation textarea {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.8;
+}
+.moderation-review-panel {
+  margin: 22px 0 0;
+}
+.moderation-review-content h3 {
+  margin: 4px 0 10px;
+  font-size: 14px;
+}
+.moderation-review-report {
+  padding: 14px 0;
+  border-top: 1px solid var(--ui-border);
+}
+.moderation-review-report > details {
+  margin: 12px 0;
+}
+.moderation-review-report > details > summary {
+  cursor: pointer;
+  color: var(--ui-text-3);
+  margin-bottom: 10px;
+}
+.moderation-review-text {
+  white-space: pre-wrap;
+}
+.moderation-review-reply {
+  padding: 10px 0 0;
+  border-top: 1px solid var(--ui-border);
+}

@@ -312,8 +312,8 @@ export function AccountRecoveryReadiness({
           : hasPassword
             ? "Password sign-in is available independently of social providers."
             : providers > 1
-              ? `${providers} social providers are linked. Add a password for a way back that does not depend on a social provider.`
-              : "This account currently depends on one social provider. Verify your email and add a password for an independent way back."}
+              ? `${providers} social providers are linked. Enrolled passkeys or an independent password can provide another way in.`
+              : "One social provider is linked. Enrolled passkeys or an independent password can provide another way in."}
       </p>
       {!emailVerified && (
         <p>

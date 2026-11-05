@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  filterInboxMessages,
   inboxMessageActivity,
   inboxMessagePreview,
   inboxMessageUnread,
@@ -119,4 +120,46 @@ test("reply activity reorders conversations without mutating original pages", ()
     page.map((message) => message.id),
     ["newer", "original"],
   );
+});
+
+test("loaded inbox search matches Unicode names, handles, original text and latest replies without changing rows", () => {
+  const first = parseInboxMessage({
+    ...original,
+    senderName: "Café 🪐",
+    text: "First line\nSecond line",
+    unread: true,
+  });
+  const second = parseInboxMessage({
+    ...original,
+    id: "second",
+    recipientHandle: "another-creator",
+    latestReply: reply,
+    unread: false,
+  });
+  const rows = [first, second];
+  const snapshot = structuredClone(rows);
+  assert.deepEqual(filterInboxMessages(rows, "CAFE\u0301", false), [first]);
+  assert.deepEqual(filterInboxMessages(rows, "first line second", false), [first]);
+  assert.deepEqual(filterInboxMessages(rows, "ANOTHER-CREATOR", false), [second]);
+  assert.deepEqual(filterInboxMessages(rows, "new private reply", false), [second]);
+  assert.deepEqual(filterInboxMessages(rows, "not loaded", false), []);
+  assert.deepEqual(rows, snapshot);
+});
+
+test("search and unread combine while pending payments remain excluded from unread results", () => {
+  const unread = parseInboxMessage({ ...original, unread: true });
+  const read = parseInboxMessage({ ...original, id: "read", unread: false });
+  const pending = parseInboxMessage({
+    ...original,
+    id: "pending",
+    direction: "sent",
+    paymentStatus: "pending",
+    unread: true,
+  });
+  assert.deepEqual(filterInboxMessages([unread, read, pending], "original", true), [unread]);
+  assert.deepEqual(filterInboxMessages([unread, read, pending], "  ", false), [
+    unread,
+    read,
+    pending,
+  ]);
 });

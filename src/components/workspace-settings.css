@@ -77,7 +77,7 @@
   width: 17px;
   height: 17px;
   margin: 2px 0 0;
-  accent-color: var(--ui-text-2);
+  accent-color: var(--ui-icon);
 }
 .settings-toggle input:focus-visible,
 .settings-select-label select:focus-visible,

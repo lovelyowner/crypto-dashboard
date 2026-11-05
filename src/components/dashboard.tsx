@@ -53,6 +53,8 @@ import { AccountPanel } from "@/components/account-panel";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { AccountCreatorProfile } from "./account-creator-profile";
 import { CreatorInbox } from "./creator-inbox";
+import { FooterSocialLinks } from "./footer-social-links";
+import { TokenBalances } from "./token-balances";
 
 type Tab = "Overview" | "Activity" | "Wallets" | "Networks" | "Profile" | "Inbox";
 type Modal = "address" | "wallet" | "account" | "settings" | "edit" | null;
@@ -332,9 +334,6 @@ export function Dashboard() {
           </span>
           fathom<span className="brand-dot">®</span>
         </a>
-        <div className="workspace-label">
-          YOUR WORKSPACE <span>01</span>
-        </div>
         <nav aria-label="Main navigation">
           {NAV.map(({ name, icon: Icon }) => (
             <button
@@ -380,16 +379,6 @@ export function Dashboard() {
           onChange={(e) => void importWatches(e.target.files?.[0])}
         />
         <div className="sidebar-bottom">
-          <div className="private-note">
-            <span className="private-icon">
-              <ShieldCheck size={20} />
-            </span>
-            <strong>Your keys. Your control.</strong>
-            <p>Wallet keys stay encrypted in this browser. No account required.</p>
-            <button onClick={() => setModal("wallet")}>
-              Explore local wallets <ArrowRight size={14} />
-            </button>
-          </div>
           <button className="profile-button" onClick={() => setModal("account")}>
             <span className="avatar">{user?.displayName?.slice(0, 1).toUpperCase() || "G"}</span>
             <span>
@@ -410,9 +399,6 @@ export function Dashboard() {
             >
               <Menu size={20} />
             </button>
-            <span className="breadcrumb">
-              Workspace <span>/</span> <strong>{tab}</strong>
-            </span>
           </div>
           <div className="topbar-right">
             <button
@@ -423,10 +409,6 @@ export function Dashboard() {
             >
               {preferences.hideBalances ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
-            <span className="local-badge">
-              <span />
-              Browser workspace
-            </span>
             <button
               className="icon-button"
               aria-label="View sync status"
@@ -457,35 +439,7 @@ export function Dashboard() {
         </header>
         <div className="page">
           <div className="page-heading">
-            <div>
-              <div className="eyebrow">A LITTLE CLARITY, ACROSS EVERY CHAIN</div>
-              <h1>
-                {tab === "Overview"
-                  ? "Your crypto, in perspective."
-                  : tab === "Activity"
-                    ? "Follow the flow."
-                    : tab === "Wallets"
-                      ? "A home for your keys."
-                      : tab === "Profile"
-                        ? "Your corner of the internet."
-                        : tab === "Inbox"
-                          ? "Your creator inbox."
-                          : "Explore the networks."}
-              </h1>
-              <p>
-                {tab === "Overview"
-                  ? "One calm place for your addresses, balances, and on-chain activity."
-                  : tab === "Activity"
-                    ? "Recent public transactions, together in one timeline."
-                    : tab === "Wallets"
-                      ? "Create locally. Back up carefully. Stay in control."
-                      : tab === "Profile"
-                        ? "Your links, wishlist, and ways to support you, in one place."
-                        : tab === "Inbox"
-                          ? "Private messages and donation notes, together in one place."
-                          : "See what each network makes available before you add an address."}
-              </p>
-            </div>
+            <h1 className="sr-only">{tab}</h1>
             <div className="heading-actions">
               <button className="button secondary" onClick={() => setModal("wallet")}>
                 <KeyRound size={16} />
@@ -573,9 +527,6 @@ export function Dashboard() {
                       ? "Add an address to see your balances"
                       : `${summary.priced} of ${watched.length} addresses valued · tokens excluded`}
                   </small>
-                  <svg className="stat-decoration" viewBox="0 0 170 70" aria-hidden="true">
-                    <path d="M0 60 L30 48 L50 54 L75 30 L100 35 L130 10 L150 18 L170 0" />
-                  </svg>
                 </article>
                 <article className="stat">
                   <div className="stat-label">
@@ -784,23 +735,8 @@ export function Dashboard() {
                       <div className="empty-panel">Opening your local workspace…</div>
                     ) : !watched.length ? (
                       <div className="empty-panel address-empty">
-                        <div className="empty-illustration">
-                          <span>
-                            <Wallet size={32} />
-                          </span>
-                          <span className="orbit orbit-one">₿</span>
-                          <span className="orbit orbit-two">Ξ</span>
-                          <span className="orbit orbit-three">◎</span>
-                        </div>
-                        <span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span>
-                        <h2>
-                          All your addresses.
-                          <br />A clearer picture.
-                        </h2>
-                        <p>
-                          Add a public address to bring its balance and recent transactions into
-                          your workspace.
-                        </p>
+                        <h2>No addresses yet</h2>
+                        <p>Add a public address to track its balance and recent transactions.</p>
                         <button className="button primary" onClick={() => openAddress()}>
                           <Plus size={17} />
                           Watch your first address
@@ -818,7 +754,7 @@ export function Dashboard() {
                             );
                           }}
                         >
-                          Or explore with public examples <ArrowRight size={14} />
+                          Use public examples <ArrowRight size={14} />
                         </button>
                       </div>
                     ) : filtered.length ? (
@@ -993,15 +929,10 @@ export function Dashboard() {
                       </div>
                     ) : (
                       <div className="empty-activity">
-                        <div className="empty-lines">
-                          <i />
-                          <i />
-                          <i />
-                        </div>
                         <span className="empty-activity-icon">
                           <Activity size={23} />
                         </span>
-                        <h3>A little quiet here.</h3>
+                        <h3>No activity to display</h3>
                         <p>
                           {watched.length
                             ? "Recent transactions appear here when an explorer returns them."
@@ -1019,7 +950,7 @@ export function Dashboard() {
                             ? "Updating public data…"
                             : query.dataUpdatedAt
                               ? `Updated ${relativeTime(query.dataUpdatedAt)}`
-                              : "Ready when you are"}
+                              : "Not refreshed yet"}
                     </div>
                   </section>
                 </div>
@@ -1040,6 +971,13 @@ export function Dashboard() {
               )}
             </>
           )}
+          {tab === "Overview" && (
+            <TokenBalances
+              watched={watched}
+              hideBalances={preferences.hideBalances}
+              paused={preferences.syncPaused || !online}
+            />
+          )}
           {tab === "Wallets" && (
             <section className="panel wallets-page">
               <div className="panel-heading">
@@ -1052,36 +990,11 @@ export function Dashboard() {
                 </button>
               </div>
               <div className="wallet-intro">
-                <div className="feature-icon">
-                  <KeyRound size={30} />
-                </div>
-                <h2>Keys that stay with you.</h2>
                 <p>
-                  A recovery phrase creates addresses in your browser. Protect its local copy with
-                  your own passphrase and keep an offline backup. Your platform account cannot
-                  recover your keys.
+                  Create or restore a recovery phrase to derive addresses in this browser. Protect
+                  the local copy with a passphrase and keep an offline backup. Your account cannot
+                  restore lost wallet keys.
                 </p>
-                <div className="wallet-feature-grid">
-                  <div>
-                    <ShieldCheck size={22} />
-                    <h3>Encrypted locally</h3>
-                    <p>AES-GCM encryption. Your passphrase is never saved.</p>
-                  </div>
-                  <div>
-                    <Globe2 size={22} />
-                    <h3>One phrase, many chains</h3>
-                    <p>Bitcoin, Ethereum, Solana, Cosmos, XRP, and NEAR.</p>
-                  </div>
-                  <div>
-                    <ArrowDownToLine size={22} />
-                    <h3>Portable backups</h3>
-                    <p>Export and restore a passphrase-encrypted wallet file.</p>
-                  </div>
-                </div>
-                <button className="button primary" onClick={() => setModal("wallet")}>
-                  {wallets.length ? "Manage local wallets" : "Create or restore a wallet"}
-                  <ArrowRight size={16} />
-                </button>
               </div>
               <div className="notice">
                 Experimental software; not independently audited. Start with test amounts. Identity
@@ -1106,25 +1019,6 @@ export function Dashboard() {
               </div>
             </>
           )}
-          {tab === "Overview" && (
-            <section className="network-strip">
-              <div>
-                <span className="eyebrow">MANY CHAINS. ONE WORKSPACE.</span>
-                <h2>Go beyond a single network.</h2>
-                <p>From Bitcoin to Cosmos, see more of your on-chain world.</p>
-              </div>
-              <div className="network-strip-icons">
-                {(["bitcoin", "ethereum", "solana", "cosmos", "near", "xrp"] as ChainId[])
-                  .filter((id) => id in CHAINS)
-                  .map((id) => (
-                    <ChainIcon key={id} chain={id} />
-                  ))}
-                <button className="text-button" onClick={() => setTab("Networks")}>
-                  Explore all {CHAIN_IDS.length} <ArrowRight size={15} />
-                </button>
-              </div>
-            </section>
-          )}
           <div hidden={tab !== "Profile"}>
             <AccountCreatorProfile onOpenAccount={() => setModal("account")} />
           </div>
@@ -1136,12 +1030,7 @@ export function Dashboard() {
             />
           )}
           <footer className="page-footer">
-            <span>
-              <span className="footer-brand">fathom</span> A clearer view of your on-chain world.
-            </span>
-            <span>
-              <ShieldCheck size={13} /> Watchlists are local to this browser
-            </span>
+            <FooterSocialLinks />
           </footer>
         </div>
       </main>

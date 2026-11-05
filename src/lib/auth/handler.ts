@@ -1,5 +1,11 @@
 import { isFreshAccountSession } from "@/lib/auth/policy";
-import { auth, authConfigured, authIsProduction, publicAuthConfiguration } from "@/lib/auth/server";
+import {
+  auth,
+  authConfigured,
+  authIsProduction,
+  authOrigin,
+  publicAuthConfiguration,
+} from "@/lib/auth/server";
 
 export async function handleAuthRequest(request: Request) {
   if (request.method === "GET" && new URL(request.url).pathname === "/api/auth/config")
@@ -21,8 +27,7 @@ export async function handleAuthRequest(request: Request) {
       );
   }
   if (request.method === "POST" && new URL(request.url).pathname === "/api/auth/add-password") {
-    const configuredOrigin = new URL(process.env.BETTER_AUTH_URL?.trim() || "http://localhost:8080")
-      .origin;
+    const configuredOrigin = authOrigin ?? "http://localhost:8080";
     const origin = request.headers.get("origin");
     if (origin !== configuredOrigin && !(!authIsProduction && origin === "http://127.0.0.1:8080"))
       return Response.json({ message: "Invalid origin" }, { status: 403 });

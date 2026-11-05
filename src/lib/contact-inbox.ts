@@ -110,6 +110,28 @@ export function inboxMessageUnread(message: ContactMessage): boolean {
   if (message.paymentStatus === "pending") return false;
   return message.unread ?? (message.direction === "received" && !message.readAt);
 }
+/** Search only data already loaded for this account; never request or persist search terms. */
+export function filterInboxMessages(
+  messages: ContactMessage[],
+  query: string,
+  unreadOnly: boolean,
+): ContactMessage[] {
+  const normalized = (value: string) =>
+    value.normalize("NFC").toLowerCase().replace(/\s+/gu, " ").trim();
+  const needle = normalized(query);
+  return messages.filter((message) => {
+    if (unreadOnly && !inboxMessageUnread(message)) return false;
+    return (
+      !needle ||
+      [
+        message.senderName,
+        message.recipientHandle,
+        message.text,
+        message.latestReply?.text ?? "",
+      ].some((value) => normalized(value).includes(needle))
+    );
+  });
+}
 export function inboxMessageActivity(message: ContactMessage): string {
   return message.lastActivityAt ?? message.latestReply?.createdAt ?? message.createdAt;
 }

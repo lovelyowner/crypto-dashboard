@@ -22,8 +22,8 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       <div className="notice">
         <Globe2 size={18} />
         <p>
-          Email sign-in, social accounts, and account 2FA require the account server included in the
-          full application. They are not enabled in this browser-only edition.
+          Email sign-in, passkeys, social accounts, and account 2FA require the account server
+          included in the full application. They are not enabled in this browser-only edition.
         </p>
       </div>
       <button className="button primary full-width" onClick={onClose}>

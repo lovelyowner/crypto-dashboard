@@ -13,6 +13,7 @@ import {
   type ContactStore,
 } from "./contact-store";
 import type { ProfileSession } from "./profile-handler";
+import { isContactBlockedError } from "./moderation";
 
 export type ContactSession = ProfileSession & { user: { id: string; name?: string | null } };
 export interface ContactHandlerDependencies {
@@ -221,6 +222,11 @@ export function createContactHandler(dependencies: ContactHandlerDependencies) {
         const sender = await session(request);
         if (sender.user.id === recipient.recipientUserId)
           throw new RequestError(400, "Choose another creator to send a message.");
+        if (
+          dependencies.store.contactAllowed &&
+          !(await dependencies.store.contactAllowed(sender.user.id, recipient.recipientUserId))
+        )
+          throw new RequestError(403, "Contact is blocked. New messages are unavailable.");
         if (recipient.settings.dmMode === "closed")
           throw new RequestError(403, "This creator is not accepting direct messages.");
         if (recipient.settings.dmMode === "paid")
@@ -300,6 +306,14 @@ export function createContactHandler(dependencies: ContactHandlerDependencies) {
               402,
               "Payment must be verified before this message can receive replies.",
             );
+          if (
+            dependencies.store.contactAllowed &&
+            !(await dependencies.store.contactAllowed(
+              item.message.senderId,
+              item.message.recipientId,
+            ))
+          )
+            throw new RequestError(403, "Contact is blocked. New replies are unavailable.");
           if (owner.user.id !== item.message.recipientId) {
             const config = await dependencies.store.readConfiguration(item.message.recipientId);
             if (config.settings.dmMode === "paid")
@@ -341,6 +355,11 @@ export function createContactHandler(dependencies: ContactHandlerDependencies) {
       }
       throw new RequestError(404, "Messaging route not found.");
     } catch (error) {
+      if (isContactBlockedError(error))
+        return respond(
+          { message: "Contact is blocked. New messages and replies are unavailable." },
+          403,
+        );
       if (error instanceof RequestError)
         return respond(
           { message: error.message },

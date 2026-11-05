@@ -86,7 +86,7 @@
   margin: 12px 0 18px;
 }
 .profile-contact-checkbox input {
-  accent-color: var(--ui-text-2);
+  accent-color: var(--ui-icon);
   margin-top: 4px;
 }
 .profile-contact-feedback {

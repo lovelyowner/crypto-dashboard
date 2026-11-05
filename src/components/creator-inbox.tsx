@@ -1,5 +1,14 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { ArrowLeft, Check, ChevronRight, LoaderCircle, Mail, RefreshCw, Send } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  Copy,
+  LoaderCircle,
+  Mail,
+  RefreshCw,
+  Send,
+} from "lucide-react";
 import {
   validateContactText,
   type ContactMessage,
@@ -8,6 +17,7 @@ import {
   type InboxResponse,
 } from "@/lib/creator-contact";
 import {
+  filterInboxMessages,
   inboxMessageActivity,
   inboxMessagePreview,
   inboxMessageUnread,
@@ -18,6 +28,11 @@ import {
 import { formatTransactionDate } from "@/lib/format";
 import { getPublicProfilePath } from "@/lib/profile-url";
 import { PaymentProgress } from "./public-profile-contact";
+import {
+  ConversationModeration,
+  ModerationReviewPanel,
+  type ModerationReplyState,
+} from "./moderation-controls";
 import "./creator-inbox.css";
 
 export interface CreatorInboxProps {
@@ -168,6 +183,9 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
     background: boolean;
   }>({ cursor: null, revision: 0, background: false });
   const [selected, setSelected] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState(() => new Map<string, string>());
+  const [search, setSearch] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [threadRefresh, setThreadRefresh] = useState(0);
   const [loading, setLoading] = useState(available);
   const loadingRef = useRef(false);
@@ -176,6 +194,8 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
   const [pageNotice, setPageNotice] = useState("");
   const folderId = useId();
   const foldersRef = useRef<HTMLDivElement>(null);
+  const visibleMessages = filterInboxMessages(messages, search, unreadOnly);
+  const hasFilters = Boolean(search || unreadOnly);
   const active = useInboxRefresh(available, () => {
     if (loadingRef.current) return;
     setRequest((value) => ({ cursor: null, revision: value.revision + 1, background: true }));
@@ -240,6 +260,9 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
           setUnreadCounts(undefined);
           setNextCursor(null);
           setSelected(null);
+          setDrafts(new Map());
+          setSearch("");
+          setUnreadOnly(false);
         }
         if (current)
           setError(
@@ -277,9 +300,19 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
     loadedOlder.current = false;
     setPageNotice("");
     setSelected(null);
+    setSearch("");
+    setUnreadOnly(false);
   }
   function refresh() {
     setRequest((value) => ({ cursor: null, revision: value.revision + 1, background: false }));
+  }
+  function updateDraft(id: string, text: string) {
+    setDrafts((previous) => {
+      const next = new Map(previous);
+      if (text) next.set(id, text);
+      else next.delete(id);
+      return next;
+    });
   }
   function updateRead(message: ContactMessage) {
     const previous = messagesRef.current.find((row) => row.id === message.id);
@@ -302,8 +335,8 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
         <Mail size={26} aria-hidden="true" />
         <h2>Your private inbox</h2>
         <p>
-          Sign in to read direct messages, donation notes, and replies. Messages are available only
-          to their participants.
+          Sign in to read private direct messages, donation notes, and replies. Reporting a
+          conversation shares it with authorized staff.
         </p>
         {onOpenAccount && (
           <button type="button" onClick={onOpenAccount}>
@@ -317,7 +350,10 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
       <div className="creator-inbox-heading">
         <div>
           <h2>Private inbox</h2>
-          <p>Messages and donation notes are visible only to their participants.</p>
+          <p>
+            Messages and donation notes are private. Reporting shares the conversation with
+            authorized staff.
+          </p>
           <p className="creator-inbox-sync-note">
             Refreshes every 30 seconds while this inbox is visible and online.
           </p>
@@ -383,6 +419,45 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
           </button>
         ))}
       </div>
+      <div className="creator-inbox-filters" role="search" aria-label="Filter inbox conversations">
+        <label className="creator-inbox-search">
+          <span className="creator-inbox-screen-reader">Search loaded conversations</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search loaded conversations"
+            maxLength={200}
+            autoComplete="off"
+          />
+        </label>
+        <label className="creator-inbox-filter-toggle">
+          <input
+            type="checkbox"
+            checked={unreadOnly}
+            onChange={(event) => setUnreadOnly(event.target.checked)}
+          />
+          Unread only
+        </label>
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setUnreadOnly(false);
+            }}
+          >
+            Reset filters
+          </button>
+        )}
+      </div>
+      {messages.length > 0 && (
+        <p className="creator-inbox-hint" role="status">
+          {visibleMessages.length} of {messages.length} loaded conversations. Filters apply to
+          loaded messages and latest replies.
+          {nextCursor ? " Load more to include older conversations." : ""}
+        </p>
+      )}
       <div
         className={`creator-inbox-layout ${selected ? "has-conversation" : ""}`}
         role="tabpanel"
@@ -427,20 +502,29 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
               </p>
             </div>
           )}
-          {messages.map((message) => (
+          {!loading && !error && messages.length > 0 && visibleMessages.length === 0 && (
+            <div className="creator-inbox-empty">
+              <h3>No matching loaded conversations</h3>
+              <p>Change or reset your filters{nextCursor ? ", or load more messages" : ""}.</p>
+            </div>
+          )}
+          {visibleMessages.map((message) => (
             <button
               key={message.id}
               type="button"
               className={`creator-inbox-row ${selected === message.id ? "selected" : ""}`}
               onClick={() => setSelected(message.id)}
-              aria-label={`Open ${message.kind === "donation" ? "donation note" : "message"} ${senderLabel(message)}`}
+              aria-label={`Open ${message.kind === "donation" ? "donation note" : "message"} ${senderLabel(message)}${drafts.has(message.id) ? " · Unsaved draft" : ""}`}
               aria-pressed={selected === message.id}
             >
               <span className="creator-inbox-row-top">
                 <strong>{senderLabel(message)}</strong>
-                {inboxMessageUnread(message) && (
-                  <span className="creator-inbox-unread">Unread</span>
-                )}
+                <span className="creator-inbox-row-badges">
+                  {inboxMessageUnread(message) && (
+                    <span className="creator-inbox-unread">Unread</span>
+                  )}
+                  {drafts.has(message.id) && <span className="creator-inbox-unread">Draft</span>}
+                </span>
               </span>
               <span className="creator-inbox-preview">{inboxMessagePreview(message)}</span>
               <span className="creator-inbox-row-bottom">
@@ -478,8 +562,11 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
             id={selected}
             active={active}
             refreshToken={threadRefresh}
+            draft={drafts.get(selected) ?? ""}
+            onDraftChange={(text) => updateDraft(selected, text)}
             onBack={() => setSelected(null)}
             onRead={updateRead}
+            onOpenAccount={onOpenAccount}
           />
         ) : (
           <div className="creator-inbox-no-selection">
@@ -488,6 +575,7 @@ function InboxWorkspace({ accountKey, accountAvailable, onOpenAccount }: Creator
           </div>
         )}
       </div>
+      <ModerationReviewPanel active={active} onOpenAccount={onOpenAccount} />
     </section>
   );
 }
@@ -496,26 +584,32 @@ function Conversation({
   id,
   active,
   refreshToken,
+  draft,
+  onDraftChange,
   onBack,
   onRead,
+  onOpenAccount,
 }: {
   id: string;
   active: boolean;
   refreshToken: number;
+  draft: string;
+  onDraftChange: (text: string) => void;
   onBack: () => void;
   onRead: (message: ContactMessage) => void;
+  onOpenAccount?: () => void;
 }) {
   const [thread, setThread] = useState<ContactThread | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [paymentRequired, setPaymentRequired] = useState(false);
   const [resumePayment, setResumePayment] = useState(false);
+  const [moderationReply, setModerationReply] = useState<ModerationReplyState>("checking");
   const alive = useRef(false);
   const loaded = useRef(false);
   const pending = useRef<AbortController | null>(null);
@@ -582,7 +676,7 @@ function Conversation({
   }, [id, revision, refreshToken, active, busy]);
   async function reply(event: FormEvent) {
     event.preventDefault();
-    if (busy || !thread || loading || !active) return;
+    if (busy || !thread || loading || !active || moderationReply !== "available") return;
     let text: string;
     try {
       text = validateContactText(draft);
@@ -605,7 +699,7 @@ function Conversation({
         { text },
       );
       if (!alive.current) return;
-      setDraft("");
+      onDraftChange("");
       setNotice("Reply sent.");
       setRevision((value) => value + 1);
     } catch (cause) {
@@ -624,11 +718,41 @@ function Conversation({
       if (alive.current) setBusy(false);
     }
   }
+  async function copyConversation() {
+    if (!thread) return;
+    const creator = `@${thread.message.recipientHandle}`;
+    const sender = thread.message.anonymous
+      ? "Anonymous"
+      : thread.message.senderName || "Account sender";
+    const entry = (author: string, createdAt: string, text: string) =>
+      `${author} · ${date(createdAt)}\n${text}`;
+    const transcript = [
+      `Private conversation · ${creator}`,
+      entry(sender, thread.message.createdAt, thread.message.text),
+      ...thread.replies.map((reply) =>
+        entry(reply.fromCreator ? creator : sender, reply.createdAt, reply.text),
+      ),
+    ].join("\n\n");
+    try {
+      await navigator.clipboard.writeText(transcript);
+      if (alive.current) setNotice("Conversation copied.");
+    } catch {
+      if (alive.current)
+        setError("Clipboard access is unavailable. Select and copy the conversation text below.");
+    }
+  }
   return (
     <article className="creator-inbox-conversation" aria-label="Private conversation">
       <div className="creator-inbox-conversation-heading">
         <button type="button" onClick={onBack} className="creator-inbox-back">
           <ArrowLeft size={14} /> Messages
+        </button>
+        <button
+          type="button"
+          onClick={() => void copyConversation()}
+          disabled={!thread || loading || busy}
+        >
+          <Copy size={13} /> Copy conversation
         </button>
         <button
           type="button"
@@ -674,6 +798,14 @@ function Conversation({
               Open @{thread.message.recipientHandle} profile
             </a>
           </header>
+          <ConversationModeration
+            id={id}
+            active={active}
+            disabled={busy}
+            refreshToken={refreshToken + revision}
+            onReplyStateChange={setModerationReply}
+            onOpenAccount={onOpenAccount}
+          />
           <div className="creator-inbox-transcript">
             <div className="creator-inbox-message">
               <div>
@@ -744,23 +876,50 @@ function Conversation({
               <textarea
                 id={`reply-${id}`}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => onDraftChange(event.target.value)}
                 maxLength={4000}
                 rows={4}
                 disabled={busy}
                 placeholder="Write a private reply…"
               />
               <span className="creator-inbox-hint">
-                {[...draft].length}/2000 characters · Plain text, visible only to this
-                conversation's participants.
+                {[...draft].length}/2000 characters · Plain text. Reporting shares this conversation
+                with authorized staff.
               </span>
-              <button
-                type="submit"
-                disabled={busy || loading || !active || !draft.trim() || [...draft].length > 2000}
-              >
-                <Send size={14} />
-                {busy ? "Sending…" : "Send reply"}
-              </button>
+              <span className="creator-inbox-hint">
+                Drafts stay in this open inbox. Leaving the inbox, reloading, or signing out clears
+                them.
+              </span>
+              {moderationReply !== "available" && (
+                <span className="creator-inbox-hint" role="status">
+                  {moderationReply === "blocked"
+                    ? "You blocked this account. Unblock it in Safety controls to reply. Your draft is kept."
+                    : moderationReply === "checking"
+                      ? "Checking whether replies are available…"
+                      : "Replies are unavailable until Safety controls can be checked. Refresh Safety controls to try again."}
+                </span>
+              )}
+              <div className="creator-inbox-reply-actions">
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    loading ||
+                    !active ||
+                    moderationReply !== "available" ||
+                    !draft.trim() ||
+                    [...draft].length > 2000
+                  }
+                >
+                  <Send size={14} />
+                  {busy ? "Sending…" : "Send reply"}
+                </button>
+                {draft && (
+                  <button type="button" disabled={busy} onClick={() => onDraftChange("")}>
+                    Discard draft
+                  </button>
+                )}
+              </div>
             </form>
           )}
           {paymentRequired && (

@@ -129,7 +129,7 @@ try {
   // The server-rendered navigation is visible before the saved ledger hydrates.
   await page.locator(".address-card").first().waitFor();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
-  await page.getByRole("heading", { name: "Your corner of the internet.", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Profile", exact: true }).waitFor();
   const picker = page.locator(".profile-wallet-picker");
   await picker.locator("summary").click();
   await picker.locator(".profile-wallet-option").first().waitFor();

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { resolveDeploymentConfiguration } from "./deployment-config";
 
 /** Bounds auth and profile payloads even when Vercel has already parsed JSON. */
 export const MAX_API_BODY_BYTES = 128 * 1024;
@@ -21,10 +22,11 @@ class ApiRequestError extends Error {
 }
 
 function configuredOrigin(options: NodeApiOptions): URL {
-  const production = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+  const deployment = resolveDeploymentConfiguration(process.env);
+  const production = deployment.production;
   // Configuration discovery must work without credentials. Never derive its
   // origin from Host or forwarded headers supplied by the caller.
-  const configured = options.baseUrl ?? process.env.BETTER_AUTH_URL?.trim();
+  const configured = options.baseUrl ?? deployment.authOrigin;
   const url = new URL(
     configured || (production ? "https://unconfigured.invalid" : "http://localhost:8080"),
   );

@@ -26,6 +26,7 @@ import {
   type StoredPaymentIntent,
 } from "./payment-store";
 import type { PaymentView, PaymentConfiguration } from "./payment-types";
+import { isContactBlockedError } from "./moderation";
 
 type Session = ProfileSession & {
   user: { id: string; name?: string };
@@ -144,6 +145,8 @@ export function createPaymentHandler(dependencies: PaymentHandlerDependencies) {
   const origin = new URL(dependencies.publicOrigin).origin;
   const hostedOrigin = origin.startsWith("https://");
   const failure = (error: unknown) => {
+    if (isContactBlockedError(error))
+      return respond({ message: "Contact is blocked. New payment quotes are unavailable." }, 403);
     if (error instanceof RequestError) return respond({ message: error.message }, error.status);
     if (error instanceof PaymentProofConflictError)
       return respond(
@@ -309,6 +312,12 @@ export function createPaymentHandler(dependencies: PaymentHandlerDependencies) {
     if (!recipient) throw new RequestError(404, "Creator profile not found.");
     if (body.kind === "dm" && account?.user.id === recipient.recipientUserId)
       throw new RequestError(400, "You cannot send a paid message to yourself.");
+    if (
+      account?.user.id &&
+      dependencies.contacts.contactAllowed &&
+      !(await dependencies.contacts.contactAllowed(account.user.id, recipient.recipientUserId))
+    )
+      throw new RequestError(403, "Contact is blocked. New payment quotes are unavailable.");
     if (body.kind === "dm" && recipient.settings.dmMode !== "paid")
       throw new RequestError(
         400,
@@ -372,22 +381,31 @@ export function createPaymentHandler(dependencies: PaymentHandlerDependencies) {
       text,
       kind: body.kind,
       anonymous: body.anonymous,
+      moderationActorId: account?.user.id ?? null,
     });
-    let row = await dependencies.store.create({
-      id,
-      messageId,
-      recipientId: recipient.recipientUserId,
-      senderId: body.anonymous ? null : account!.user.id,
-      capabilityHash: capabilityToken ? digest(capabilityToken) : null,
-      kind: body.kind,
-      method: body.method,
-      amount,
-      recipientAddress: body.method === "ethereum" ? recipient.ethereumAddress : null,
-      amountWei: body.method === "ethereum" ? contactAmountUnits(amount, 18).toString() : null,
-      nonceData: body.method === "ethereum" ? `0x${randomBytes(32).toString("hex")}` : null,
-      credentialId: credential?.id ?? null,
-      expiresAt: new Date(now() + 24 * 60 * 60 * 1000),
-    });
+    let row: StoredPaymentIntent;
+    try {
+      row = await dependencies.store.create({
+        id,
+        messageId,
+        recipientId: recipient.recipientUserId,
+        senderId: body.anonymous ? null : account!.user.id,
+        capabilityHash: capabilityToken ? digest(capabilityToken) : null,
+        kind: body.kind,
+        method: body.method,
+        amount,
+        recipientAddress: body.method === "ethereum" ? recipient.ethereumAddress : null,
+        amountWei: body.method === "ethereum" ? contactAmountUnits(amount, 18).toString() : null,
+        nonceData: body.method === "ethereum" ? `0x${randomBytes(32).toString("hex")}` : null,
+        credentialId: credential?.id ?? null,
+        expiresAt: new Date(now() + 24 * 60 * 60 * 1000),
+      });
+    } catch (error) {
+      // A block can commit between the draft and intent writes. No invoice has
+      // been requested yet; remove only an orphan draft, never an existing intent.
+      await dependencies.contacts.discardPendingMessage?.(messageId, id);
+      throw error;
+    }
     if (credential) {
       try {
         const keys = decryptPaymentCredentials(

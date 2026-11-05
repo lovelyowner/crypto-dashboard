@@ -2,6 +2,10 @@
 
 A multi-chain, browser-first crypto address dashboard, rebuilt from the supplied Grok application. Watch public addresses without signing in; create passphrase-encrypted wallets locally. Account authentication runs on a small same-origin server. No Grok services or shared broker credentials are required.
 
+See [development proposals](docs/proposals.md) for prioritized additions and simplifications.
+
+Ongoing updates use the `preview` branch, with production kept on `main`. See the [preview workflow](docs/preview-workflow.md) for the reusable Vercel link, separate preview account configuration, and efficient UI review.
+
 ## Open or publish the browser edition
 
 Run `npm run build:site` to create:
@@ -16,6 +20,8 @@ The browser edition supports public-address tracking, local encrypted wallets, a
 Saved data is specific to a browser and site address. Export your watchlist and encrypted wallet backup before switching from a local file to a hosted URL; export files do not transfer automatically. Keep recovery words offline.
 
 The normal `npm run build` / `npm start` workflow below remains available for the full application, including account features once its backend is configured.
+
+For an interactive inbox review without publishing, run `npm run build:review` and open `Fathom-inbox-preview.html` in a browser. It uses the real inbox interface with fictional messages held in memory. Try creator/sender views, unread replies, separate conversation drafts, Discard draft, and Copy conversation. No real accounts, payments, or messages are sent, and the file makes no network requests. Reloading resets the sample. Verify it with `npm run test:review` after building (Playwright Chromium required).
 
 ## Deploy this repository to Vercel
 
@@ -76,7 +82,9 @@ Install the browser for UI tests with `npx playwright install chromium`. Browser
 - Workspace settings for on-screen balance hiding, refresh intervals, and sync pause, with offline notices and local cross-tab preference updates. Hiding amounts masks DOM text, not the public addresses or provider requests. Explicit CSV exports still contain real amounts. Pausing stops new refresh operations; requests belonging to an already running refresh may finish.
 - Native balance/activity adapters for Bitcoin, Ethereum and EVM networks, Solana, Cosmos Hub, Osmosis, Celestia, NEAR, and XRP. Polkadot and Kusama expose finalized native free balances; history requires an indexer. Some EVM networks provide balance only.
 - Browser-generated 24-word BIP39 wallets, offline backup acknowledgment and word challenge, BTC/ETH/SOL/Cosmos/XRP/NEAR public addresses, passphrase-only AES-GCM encryption using PBKDF2-SHA256 (600,000 iterations), encrypted backup import/export, and password-gated recovery reveal. Generating NEAR/XRP addresses does not fund or activate their accounts.
-- Email/password and Unicode username login, authenticator enrollment with verification, single-use recovery codes, server-enforced session limits, account linking, and direct Google/Discord/Twitter adapters when configured.
+- Email/password, Unicode username, and passkey login, authenticator enrollment with verification, single-use recovery codes, server-enforced session limits, account linking, and direct Google/Discord/Twitter adapters when configured.
+- Exact read-only [ERC20/SPL token balances](docs/token-balances.md) for explicitly selected public owners and contracts/mints, separate from native USD totals. Public token-watch JSON backups preview validated merges, skip duplicates and unmatched owners, and contain no wallet keys or account data.
+- Inbox block/report controls, prospective contact/payment-quote guards, private report snapshots, and a server-authorized moderation review queue. See [Messages and payments](docs/messages-and-payments.md).
 - Responsive desktop/mobile layout and keyboard-accessible dialogs.
 
 ## Creator profiles, wishlists, and donations
@@ -109,13 +117,13 @@ Transaction dates in the table and recent-activity feed use **dd.mm.yy in UTC**,
 
 ## Limits that matter
 
-Tracking queries public third-party APIs directly from the browser. This shares queried addresses and the client's IP with those providers. CORS restrictions, outages, and rate limits can make data unavailable. Native balances are not full portfolio valuations: token/NFT holdings, staking, internal calls, and complete historical indexing are outside this version. Transactions involving two watched addresses appear once per address. USD totals include only successfully priced addresses and are labeled accordingly.
+Tracking queries public third-party APIs directly from the browser. This shares queried addresses and the client's IP with those providers. CORS restrictions, outages, and rate limits can make data unavailable. Native balances are not full portfolio valuations. Explicit ERC20/SPL watches show token quantities separately; automatic token indexing, token USD prices, NFTs, staking, internal calls, and complete historical indexing remain outside this version. Transactions involving two watched addresses appear once per address. USD totals include only successfully priced native addresses and are labeled accordingly.
 
 Monero deliberately does not claim public address-only balances or history: these are private. No private view keys are requested. Polkadot/Kusama transaction history and service indexing are not implemented. Public address format validation does not prove ownership.
 
 Wallets are experimental and not independently audited. Start with test amounts. Recovery words and passphrases never go to the account server. The encrypted browser copy can be lost by clearing site data; keep an offline phrase and a separate encrypted backup. Accounts cannot recover lost wallet keys. All local watchlists and encrypted wallets belong to this browser workspace, not to an account, and are not cloud-synced. Signing in on another device does not restore them.
 
-Google, Discord, and Twitter need registered applications and server credentials. Fluxer, Stoat, and Bluesky are shown as not integrated. Yoti verification and custodial/service-held keys are not implemented. Identity verification alone is not key custody. OAuth sign-in uses the provider's MFA; the local TOTP challenge protects email/username sign-in. TOTP remains a standard six-digit, 30-second code rather than offering misleading security sliders.
+Google, Discord, and Twitter need registered applications and server credentials. Unavailable adapters, including Fluxer, Stoat, and Bluesky, appear in a compact availability note. Yoti verification and custodial/service-held keys are not implemented. Identity verification alone is not key custody. OAuth sign-in uses the provider's MFA; the local TOTP challenge protects email, username, and passkey sign-in. TOTP remains a standard six-digit, 30-second code rather than offering misleading security sliders.
 
 ## Deploy
 

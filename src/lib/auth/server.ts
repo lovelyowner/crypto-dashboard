@@ -1,6 +1,6 @@
 /** Server-only, same-origin authentication. No platform broker or embedded OAuth credentials. */
 import { betterAuth } from "better-auth";
-import { twoFactor, username } from "better-auth/plugins";
+import { username } from "better-auth/plugins";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,18 +14,24 @@ import {
   ACCOUNT_RATE_LIMIT_POLICY,
 } from "./policy";
 import { sessionDurationPlugin } from "./session-duration";
-import { configuredAuthOrigin } from "./configuration";
+import { resolveDeploymentConfiguration } from "../deployment-config";
+import {
+  accountPasskeys,
+  accountTwoFactor,
+  passkeyConfiguration,
+  passkeyPolicyPlugin,
+} from "./passkeys.server";
 
 const env = (name: string) => process.env[name]?.trim() || undefined;
-export const authIsProduction =
-  import.meta.env?.PROD || env("NODE_ENV") === "production" || env("VERCEL") === "1";
+const deployment = resolveDeploymentConfiguration(process.env, import.meta.env?.PROD === true);
+export const authIsProduction = deployment.production;
 const production = authIsProduction;
-const explicitBaseURL = configuredAuthOrigin(env("BETTER_AUTH_URL"), production);
-const databaseUrl = env("DATABASE_URL");
-const configuredSecret = env("BETTER_AUTH_SECRET");
-export const authConfigured =
-  !production ||
-  Boolean(databaseUrl && configuredSecret && configuredSecret.length >= 32 && explicitBaseURL);
+export const authOrigin = deployment.authOrigin;
+const explicitBaseURL = authOrigin;
+const passkeyOrigin = explicitBaseURL ?? "http://localhost:8080";
+const databaseUrl = deployment.databaseUrl;
+const configuredSecret = deployment.authSecret;
+export const authConfigured = deployment.authConfigured;
 
 function developmentSecret(): string {
   const directory = join(process.cwd(), ".local");
@@ -53,6 +59,8 @@ export function publicAuthConfiguration() {
   return {
     configured: authConfigured,
     emailRecovery: authConfigured && emailConfigured,
+    passkeys: authConfigured && passkeyConfiguration(passkeyOrigin).enabled,
+    passkeyOrigin,
     providers: {
       google: Boolean(authConfigured && googleId && googleSecret),
       discord: Boolean(authConfigured && discordId && discordSecret),
@@ -143,11 +151,9 @@ export const auth = betterAuth({
       usernameNormalization: normalizeUsername,
       displayUsernameNormalization: normalizeUsername,
     }),
-    twoFactor({
-      issuer: "Fathom",
-      totpOptions: { digits: 6, period: 30 },
-      backupCodeOptions: { amount: 10, length: 16, storeBackupCodes: "encrypted" },
-    }),
+    accountPasskeys(passkeyOrigin),
+    passkeyPolicyPlugin(passkeyOrigin),
+    accountTwoFactor(),
     sessionDurationPlugin(),
   ],
 });
