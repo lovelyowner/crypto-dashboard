@@ -144,7 +144,7 @@ async function check(name, run) {
   console.log(`PASS ${name}`);
 }
 async function readyConfiguration() {
-  await page.getByText("Sign-in services", { exact: true }).waitFor();
+  await page.locator(".account-provider-options[data-availability='ready']").waitFor();
 }
 async function openLogin(path = "/login", waitForReady = true) {
   await page.goto(new URL(path, origin).href, { waitUntil: "domcontentloaded" });
@@ -156,6 +156,31 @@ async function assertNoProviderActions() {
   assert.equal(await page.getByText("Checking availability…", { exact: true }).count(), 0);
   for (const name of unsupported)
     assert.equal(await page.getByText(name, { exact: true }).count(), 0);
+}
+async function assertChoicesBeforeCredentials() {
+  assert.equal(
+    await page.locator(".account-provider-options").evaluate((choices) => {
+      const form = document.querySelector(".account-form");
+      return Boolean(
+        form && choices.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }),
+    true,
+    "Social sign-in choices appear before the credential form",
+  );
+}
+async function setupHelp(label) {
+  const requestsBefore = providerRequests.length;
+  const button = page.getByRole("button", { name: `${label} sign-in setup`, exact: true });
+  assert.equal(await button.isEnabled(), true);
+  assert.equal(await button.getAttribute("data-provider-action"), "setup");
+  assert.equal(await button.locator("small").innerText(), "Setup needed");
+  await button.click();
+  await page
+    .getByRole("status")
+    .filter({ hasText: /website owner/i })
+    .waitFor();
+  assert.equal(providerRequests.length, requestsBefore, "Setup help never calls the OAuth SDK");
 }
 const loadingOptions = () =>
   page.getByRole("status").filter({ hasText: /^Checking sign-in services…$/ });
@@ -177,9 +202,12 @@ async function initiate(providerId, label, linking = false) {
       new URL(response.url()).pathname === path && request.postDataJSON()?.provider === providerId
     );
   });
-  await page
-    .getByRole("button", { name: `${linking ? "Connect" : "Continue with"} ${label}`, exact: true })
-    .click();
+  const button = page.getByRole("button", {
+    name: `${linking ? "Connect" : "Continue with"} ${label}`,
+    exact: true,
+  });
+  assert.equal(await button.getAttribute("data-provider-action"), "oauth");
+  await button.click();
   await response;
   await page.waitForFunction(() => !document.querySelector(".account-provider[disabled]"));
   if (!linking) assert.equal(providerRequests.at(-1).remember, "false");
@@ -200,25 +228,22 @@ try {
   await releaseConfiguration(configuration);
   await readyConfiguration();
   await check(
-    "unconfigured account service shows setup guidance instead of inert provider buttons",
+    "unconfigured account service exposes five active setup choices without OAuth requests",
     async () => {
-      assert.equal(await page.locator(".account-provider").count(), 0);
-      await page
-        .locator(".account-provider-note")
-        .filter({ hasText: "Social sign-in is not enabled on this website." })
-        .waitFor();
-      assert.equal(await page.locator(".account-service-details").getAttribute("open"), null);
-      await page.getByText("Sign-in services", { exact: true }).click();
-      assert.equal(await page.locator(".account-service-statuses li").count(), 5);
-      assert.equal(await page.locator(".account-service-statuses button").count(), 0);
       assert.equal(
-        await page
-          .locator(".account-service-statuses")
-          .getByText("Not enabled", { exact: true })
-          .count(),
+        await page.locator(".account-provider[data-provider-action='setup']").count(),
         5,
       );
-      await assertNoProviderActions();
+      assert.equal(
+        await page.locator(".account-provider[data-provider-action='oauth']").count(),
+        0,
+      );
+      for (const [, label] of supported) await setupHelp(label);
+      assert.equal(await page.getByText("Sign-in services", { exact: true }).count(), 0);
+      assert.equal(await page.locator(".account-service-statuses li").count(), 0);
+      for (const label of unsupported)
+        assert.equal(await page.getByText(label, { exact: true }).count(), 0);
+      await assertChoicesBeforeCredentials();
       assert.equal(await loadingOptions().count(), 0);
     },
   );
@@ -238,24 +263,31 @@ try {
   };
   await openLogin();
   await check(
-    "only supported providers with a true boolean configuration become actions",
+    "partial configuration keeps supported OAuth and setup choices visible with distinct actions",
     async () => {
       assert.deepEqual(
         await page
           .locator(".account-provider")
           .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))),
-        ["Continue with Google", "Continue with GitHub"],
+        [
+          "Continue with Google",
+          "Discord sign-in setup",
+          "Twitter / X sign-in setup",
+          "Continue with GitHub",
+          "Twitch sign-in setup",
+        ],
       );
       assert.equal(await page.locator(".account-provider:disabled").count(), 0);
-      await page.getByText("Sign-in services", { exact: true }).click();
       assert.equal(
-        await page
-          .locator(".account-service-statuses")
-          .getByText("Available", { exact: true })
-          .count(),
+        await page.locator(".account-provider[data-provider-action='oauth']").count(),
         2,
       );
-      assert.equal(await page.locator(".account-service-statuses li").count(), 5);
+      assert.equal(
+        await page.locator(".account-provider[data-provider-action='setup']").count(),
+        3,
+      );
+      await setupHelp("Discord");
+      assert.equal(await page.getByText("Sign-in services", { exact: true }).count(), 0);
       for (const label of unsupported)
         assert.equal(await page.getByText(label, { exact: true }).count(), 0);
     },
@@ -324,6 +356,7 @@ try {
     "all five configured login actions initiate the correct SDK provider with safe callbacks and duration",
     async () => {
       assert.equal(await page.locator(".account-provider").count(), 5);
+      await assertChoicesBeforeCredentials();
       for (const [id, label] of supported) {
         const request = await initiate(id, label);
         assert.equal(request.path, "sign-in/social");
@@ -344,6 +377,7 @@ try {
       );
       assert.equal(await page.locator('input[autocomplete="email"]').count(), 1);
       assert.equal(await page.locator(".account-provider").count(), 5);
+      await assertChoicesBeforeCredentials();
       for (const [id, label] of supported) {
         const request = await initiate(id, label);
         assert.equal(request.body.provider, id);
@@ -352,6 +386,21 @@ try {
       }
     },
   );
+
+  await check("recovery and reset forms keep the sign-in choice block hidden", async () => {
+    await page.getByRole("button", { name: "Forgot password?", exact: true }).click();
+    await page.getByRole("heading", { name: "Recover access", exact: true }).waitFor();
+    await assertNoProviderActions();
+    assert.equal(await page.locator(".account-provider-options").count(), 0);
+    assert.equal(
+      await page.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),
+      0,
+    );
+    await openLogin("/login?reset=1&token=provider-fixture-reset", false);
+    await page.getByRole("button", { name: "Set new password", exact: true }).waitFor();
+    await assertNoProviderActions();
+    assert.equal(await page.locator(".account-provider-options").count(), 0);
+  });
 
   session = signedInSession;
   accounts = [linked("credential"), linked("github")];
@@ -378,6 +427,22 @@ try {
       assert.equal(request.path, "link-social");
       assert.equal(request.body.provider, "google");
       callbackPath(request);
+    },
+  );
+  await check(
+    "a linked provider stays connected when its sign-in configuration is unavailable",
+    async () => {
+      configuration = { ...configuration, providers: { ...allProviders, github: false } };
+      await openLogin();
+      await page.getByText("GitHub connected", { exact: true }).waitFor();
+      assert.equal(
+        await page.getByRole("button", { name: "Connect GitHub", exact: true }).count(),
+        0,
+      );
+      await setupHelp("GitHub");
+      configuration = { ...configuration, providers: allProviders };
+      await openLogin();
+      await page.getByText("GitHub connected", { exact: true }).waitFor();
     },
   );
   await page
@@ -440,7 +505,6 @@ try {
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByText("Sign-in services", { exact: true }).click();
   session = null;
   accounts = [];
   configurationMode = "ready";
@@ -465,6 +529,8 @@ try {
       await page.getByRole("button", { name: "Use a backup code", exact: true }).click();
       await page.getByLabel("Single-use backup code", { exact: true }).waitFor();
       assert.equal(new URL(page.url()).searchParams.has("twoFactor"), false);
+      await assertNoProviderActions();
+      assert.equal(await page.locator(".account-provider-options").count(), 0);
     },
   );
   await check(
@@ -534,10 +600,23 @@ try {
         setup: { environment: "preview", database: true, secret: false, origin: false },
       };
       await openLogin();
-      await page.getByText("Website sign-in setup", { exact: true }).click();
+      const requestsBefore = providerRequests.length;
+      await page.getByRole("button", { name: "Google sign-in setup", exact: true }).click();
+      const details = page.locator(".account-setup-details");
+      assert.equal(await details.getAttribute("open"), "");
+      assert.equal(
+        await details.locator("summary").evaluate((summary) => summary === document.activeElement),
+        true,
+      );
+      assert.equal(providerRequests.length, requestsBefore);
+      const rows = details.locator(".account-service-statuses li");
+      assert.equal(await rows.count(), 4);
+      assert.match(await rows.nth(3).innerText(), /Google/);
       assert.equal(
         await page
           .locator(".account-setup-details")
+          .locator(".account-service-statuses li")
+          .filter({ hasNotText: "Google" })
           .getByText("Needs setup", { exact: true })
           .count(),
         2,
@@ -558,6 +637,20 @@ try {
       assert.match(report, /PREVIEW_DATABASE_URL: configured/);
       assert.match(report, /PREVIEW_BETTER_AUTH_SECRET: needed/);
       assert.match(report, /GOOGLE_CLIENT_ID \/ GOOGLE_CLIENT_SECRET: not enabled/);
+      configuration = {
+        ...configuration,
+        configured: true,
+        providers: { ...allProviders, google: false },
+        setup: { environment: "preview", database: true, secret: true, origin: true },
+      };
+      await openLogin();
+      await page.getByRole("button", { name: "Google sign-in setup", exact: true }).click();
+      assert.equal(await details.getAttribute("open"), "");
+      assert.equal(await details.locator(".account-service-statuses li").count(), 4);
+      assert.match(
+        await details.locator(".account-service-statuses li").nth(3).innerText(),
+        /Google/,
+      );
       configuration = {
         configured: true,
         emailRecovery: false,

@@ -87,6 +87,10 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [resetToken, setResetToken] = useState("");
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [setupRequest, setSetupRequest] = useState<{
+    provider: SupportedSocialProviderId;
+    version: number;
+  } | null>(null);
   const [currentOrigin, setCurrentOrigin] = useState("");
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
@@ -239,6 +243,8 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
 
   const connect = (provider: SupportedSocialProviderId, linking: boolean) =>
     void run(async () => {
+      if (!configuration?.configured || configuration.providers[provider] !== true)
+        throw new Error(`${socialProviderLabel(provider)} sign-in needs website-owner setup.`);
       if (
         configuration?.signInOrigin &&
         currentOrigin &&
@@ -283,6 +289,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         linking={linking}
         busy={busy}
         onConnect={connect}
+        onSetup={(provider) =>
+          setSetupRequest((value) => ({ provider, version: (value?.version ?? 0) + 1 }))
+        }
       />
     );
 
@@ -348,7 +357,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           original website address.
         </p>
       )}
-      <AccountSetupStatus configuration={configuration} />
+      <AccountSetupStatus configuration={configuration} request={setupRequest} />
       {notice && (
         <p className="account-message account-success" role="status">
           {notice}
@@ -360,6 +369,77 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         </p>
       ) : !user || mode === "reset" ? (
         <>
+          {!challenge && (mode === "login" || mode === "signup") && (
+            <>
+              <div className="account-divider">CONTINUE WITH</div>
+              {mode === "login" &&
+                configuration?.configured &&
+                configuration.passkeys &&
+                passkeySupported && (
+                  <>
+                    <button
+                      type="button"
+                      className="account-secondary account-passkey-signin"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          const controller = beginPasskeyCeremony();
+                          passkeyOperation.current = controller;
+                          setPasskeyBusy(true);
+                          try {
+                            const result = await authClient.signIn.passkey({
+                              fetchOptions: {
+                                signal: controller.signal,
+                                headers: {
+                                  [SESSION_DURATION_HEADER]: sessionDuration,
+                                  "x-fathom-remember-me": String(rememberMe),
+                                },
+                              },
+                            });
+                            if (controller.signal.aborted) return;
+                            if (result.error)
+                              throw new Error(
+                                result.error.message ||
+                                  "Passkey sign-in was cancelled. Retry or use another method.",
+                              );
+                            if (
+                              (result.data as { twoFactorRedirect?: boolean } | null)
+                                ?.twoFactorRedirect
+                            ) {
+                              setChallenge(true);
+                              return;
+                            }
+                            await refetch();
+                            setNotice("Signed in with your passkey.");
+                          } finally {
+                            if (passkeyOperation.current === controller)
+                              passkeyOperation.current = null;
+                            endPasskeyCeremony(controller);
+                            setPasskeyBusy(false);
+                          }
+                        })
+                      }
+                    >
+                      <KeyRound size={15} /> Sign in with a passkey
+                    </button>
+                    {passkeyBusy && (
+                      <button
+                        className="account-text-button"
+                        type="button"
+                        onClick={() => {
+                          passkeyOperation.current?.abort();
+                          cancelPasskeyCeremony();
+                        }}
+                      >
+                        Cancel passkey sign-in
+                      </button>
+                    )}
+                  </>
+                )}
+              {providerButtons(false)}
+              <div className="account-divider">OR USE A PASSWORD</div>
+            </>
+          )}
           <form className="account-form" onSubmit={submit}>
             {challenge ? (
               <>
@@ -410,7 +490,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                   <label>
                     {identifierKind === "email" ? "Email address" : "Username"}
                     <input
-                      autoFocus
                       type={identifierKind === "email" ? "email" : "text"}
                       autoComplete={identifierKind === "email" ? "email" : "username"}
                       value={identifier}
@@ -557,76 +636,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               Password reset emails require a configured email delivery service. Use another linked
               sign-in method if available.
             </p>
-          )}
-          {!challenge && (mode === "login" || mode === "signup") && (
-            <>
-              <div className="account-divider">OR CONTINUE WITH</div>
-              {mode === "login" &&
-                configuration?.configured &&
-                configuration.passkeys &&
-                passkeySupported && (
-                  <>
-                    <button
-                      type="button"
-                      className="account-secondary account-passkey-signin"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          const controller = beginPasskeyCeremony();
-                          passkeyOperation.current = controller;
-                          setPasskeyBusy(true);
-                          try {
-                            const result = await authClient.signIn.passkey({
-                              fetchOptions: {
-                                signal: controller.signal,
-                                headers: {
-                                  [SESSION_DURATION_HEADER]: sessionDuration,
-                                  "x-fathom-remember-me": String(rememberMe),
-                                },
-                              },
-                            });
-                            if (controller.signal.aborted) return;
-                            if (result.error)
-                              throw new Error(
-                                result.error.message ||
-                                  "Passkey sign-in was cancelled. Retry or use another method.",
-                              );
-                            if (
-                              (result.data as { twoFactorRedirect?: boolean } | null)
-                                ?.twoFactorRedirect
-                            ) {
-                              setChallenge(true);
-                              return;
-                            }
-                            await refetch();
-                            setNotice("Signed in with your passkey.");
-                          } finally {
-                            if (passkeyOperation.current === controller)
-                              passkeyOperation.current = null;
-                            endPasskeyCeremony(controller);
-                            setPasskeyBusy(false);
-                          }
-                        })
-                      }
-                    >
-                      <KeyRound size={15} /> Sign in with a passkey
-                    </button>
-                    {passkeyBusy && (
-                      <button
-                        className="account-text-button"
-                        type="button"
-                        onClick={() => {
-                          passkeyOperation.current?.abort();
-                          cancelPasskeyCeremony();
-                        }}
-                      >
-                        Cancel passkey sign-in
-                      </button>
-                    )}
-                  </>
-                )}
-              {providerButtons(false)}
-            </>
           )}
         </>
       ) : (

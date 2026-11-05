@@ -1,15 +1,32 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PublicAuthConfiguration } from "@/lib/auth/public-configuration";
+import {
+  SOCIAL_PROVIDERS,
+  socialProviderLabel,
+  type SupportedSocialProviderId,
+} from "@/lib/auth/providers";
 
 export function AccountSetupStatus({
   configuration,
+  request,
 }: {
   configuration: PublicAuthConfiguration | null;
+  request?: { provider: SupportedSocialProviderId; version: number } | null;
 }) {
   const [notice, setNotice] = useState("");
+  const details = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!request || !details.current) return;
+    details.current.open = true;
+    details.current.querySelector("summary")?.focus({ preventScroll: true });
+    details.current.scrollIntoView({ block: "nearest" });
+  }, [request]);
   if (
     !configuration?.setup ||
-    (configuration.configured && Object.values(configuration.providers).some(Boolean))
+    (configuration.configured &&
+      SOCIAL_PROVIDERS.filter((provider) => provider.supported).every(
+        (provider) => configuration.providers[provider.providerId] === true,
+      ))
   )
     return null;
   const setup = configuration.setup;
@@ -27,7 +44,7 @@ export function AccountSetupStatus({
     "Configure these in the matching server environment, register callbacks with each provider, then redeploy. This checklist contains no credential values.",
   ].join("\n");
   return (
-    <details className="account-service-details account-setup-details">
+    <details ref={details} className="account-service-details account-setup-details">
       <summary>Website sign-in setup</summary>
       <p className="account-help">
         The website owner can use this checklist to finish account setup. These checks show settings
@@ -46,7 +63,25 @@ export function AccountSetupStatus({
             <span>{ready ? "Configured" : "Needs setup"}</span>
           </li>
         ))}
+        {request && (
+          <li>
+            <span className="account-service-name">
+              {socialProviderLabel(request.provider)} sign-in
+            </span>
+            <span>
+              {configuration.configured && configuration.providers[request.provider] === true
+                ? "Configured"
+                : "Needs setup"}
+            </span>
+          </li>
+        )}
       </ul>
+      {request && (
+        <p className="account-help">
+          {socialProviderLabel(request.provider)} needs its registered application ID, client
+          secret, and exact website callback URL configured by the website owner.
+        </p>
+      )}
       <button
         type="button"
         className="account-secondary"

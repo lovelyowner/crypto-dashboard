@@ -204,7 +204,16 @@ async function runChecks() {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage();
     const errors = [];
+    const providerRequests = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    page.on("request", (request) => {
+      if (
+        ["/api/auth/sign-in/social", "/api/auth/link-social"].includes(
+          new URL(request.url()).pathname,
+        )
+      )
+        providerRequests.push(request.url());
+    });
     await context.route("**/*", (route) => {
       return new URL(route.request().url()).origin === baseURL
         ? route.continue()
@@ -243,15 +252,36 @@ async function runChecks() {
       );
     });
     await check(
-      "unavailable social sign-in methods use compact honest capability notes",
+      "hosted social choices open setup help without attempting unconfigured OAuth",
       async () => {
-        assert.equal(await dialog.locator(".account-provider").count(), 0);
-        const note = await dialog.locator(".account-provider-note").textContent();
-        assert.match(note, /Social sign-in is not enabled/);
-        await dialog.getByText("Sign-in services", { exact: true }).click();
-        const services = dialog.locator(".account-provider-options .account-service-statuses");
-        assert.equal(await services.locator("li").count(), 5);
-        assert.equal(await services.getByText("Not enabled", { exact: true }).count(), 5);
+        await dialog.locator(".account-provider-options[data-availability='ready']").waitFor();
+        assert.equal(
+          await dialog.locator(".account-provider[data-provider-action='setup']").count(),
+          5,
+        );
+        assert.equal(
+          await dialog.locator(".account-provider[data-provider-action='oauth']").count(),
+          0,
+        );
+        assert.equal(await dialog.locator(".account-provider:disabled").count(), 0);
+        assert.equal(await dialog.getByText("Sign-in services", { exact: true }).count(), 0);
+        assert.equal(
+          await dialog.locator(".account-provider-options .account-service-statuses").count(),
+          0,
+        );
+        for (const name of ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"])
+          assert.equal(await dialog.getByText(name, { exact: true }).count(), 0);
+        await dialog.getByRole("button", { name: "Google sign-in setup", exact: true }).click();
+        const details = dialog.locator(".account-setup-details");
+        assert.equal(await details.getAttribute("open"), "");
+        assert.equal(
+          await details
+            .locator("summary")
+            .evaluate((summary) => summary === document.activeElement),
+          true,
+        );
+        assert.match(await details.innerText(), /website owner/i);
+        assert.deepEqual(providerRequests, []);
         assert.equal(
           await dialog.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),
           0,

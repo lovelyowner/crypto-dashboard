@@ -113,3 +113,9 @@ Use the configured stable sign-in origin. An immutable Vercel deployment and its
 ### Local OAuth addresses
 
 When any OAuth application is configured locally, configuration discovery advertises the actual callback origin (the explicit `BETTER_AUTH_URL`, or `http://localhost:8080` by default). Use that exact address to start social sign-in: OAuth state cookies cannot move between `127.0.0.1` and `localhost`. Wrong-address guidance also applies in development. Without OAuth apps or an explicit origin, default local email/password access on either loopback address remains available.
+
+## Finding the social sign-in buttons
+
+Google, Discord, Twitter/X, GitHub, and Twitch choices appear above the password form on sign-in and sign-up. A configured service starts its OAuth flow with one click. An unavailable service shows **Setup needed** and opens the website-owner checklist; it does not send a failing OAuth request. Setup help remains available when only some services are configured. Existing linked identities remain labeled connected even if their provider is later disabled.
+
+The UI cannot activate a provider without a registered application, matching callbacks, and server credentials. In Vercel Preview, configure the isolated account settings first, then each desired provider's client ID/secret. Redeploy afterward. The checklist exposes names/statuses only, never credential values.

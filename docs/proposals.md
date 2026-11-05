@@ -9,10 +9,10 @@
 | Public token-watch backups        | Strictly validated JSON import/export of public token configuration. Imports merge and deduplicate, matching existing owners by network/address even when local IDs differ. Unmatched owners are skipped until added manually; wallet keys, private accounts, and balances are excluded. |
 | Passkeys                          | Real WebAuthn registration, sign-in, rename, and removal, bound to the configured origin, with fresh management sessions and existing TOTP/recovery/session policies preserved.                                                                                                          |
 | Decorative balance graph          | Removed the fixed rising SVG and its styles. No balance history is implied.                                                                                                                                                                                                              |
-| Inactive login buttons            | Only configured, implemented providers remain actionable; unavailable providers use compact status text.                                                                                                                                                                                 |
+| Inactive login buttons            | Configured services start OAuth; unavailable supported choices open explicit setup help rather than remaining hidden or acting as dead login buttons.                                                                                                                                                                                 |
 | Repeated promotional copy         | Simplified address/activity empty states and wallet instructions; removed duplicate sidebar and network promotional cards.                                                                                                                                                               |
 | Sidebar cleanup and action layout | Removed the Fathom brand block, curved active-navigation marker, and Workspace tools heading/divider. Kept accessible navigation and compact contextual wallet/address actions.                                                                                                          |
-| Social sign-in choices            | Google, Discord, Twitter/X, GitHub, and Twitch adapters, with configured buttons for sign-in and linking. A collapsed service list shows only supported services; planned integrations stay in development proposals. Registered provider credentials are required for live use.         |
+| Social sign-in choices            | Google, Discord, Twitter/X, GitHub, and Twitch adapters, with configured buttons for sign-in and linking. Supported service choices sit above the password form; missing services open setup help. Planned integrations stay in development proposals. Registered provider credentials are required for live use.         |
 | Sign-in availability recovery     | One loading indicator, an eight-second request/body deadline, validated public configuration, and an explicit retry after errors. Failed or incomplete responses never enable sign-in controls.                                                                                          |
 
 ## Applied in this batch
@@ -41,7 +41,7 @@ The development changes also include the exact white/gray palette, simpler heade
 ## Simplify next
 
 - Consolidate repeated recovery explanations into one short contextual help section while keeping backup warnings and errors visible.
-- Keep provider setup diagnostics collapsed; once deployment setup is complete, prioritize the enabled sign-in methods and independent recovery options.
+- Keep detailed website diagnostics collapsed until a setup-help choice is selected; avoid duplicating the service grid with another availability list.
 
 ## Delivery and limits
 

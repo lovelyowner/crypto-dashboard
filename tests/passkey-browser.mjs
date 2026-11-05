@@ -43,12 +43,12 @@ try {
     "Run the browser at the configured relying-party origin",
   );
   assert.equal(
-    await panel.locator(".account-provider").count(),
+    await panel.locator('.account-provider[data-provider-action="oauth"]').count(),
     Object.values(configuration.providers).filter(Boolean).length,
   );
   assert.match(
     await panel.locator(".account-provider-note").textContent(),
-    /Social sign-in is not enabled/,
+    /website owner needs to enable social sign-in/,
   );
   await panel.getByRole("button", { name: "New here? Create an account", exact: true }).click();
   await panel

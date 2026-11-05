@@ -1,5 +1,10 @@
+import { useState } from "react";
 import { Check } from "lucide-react";
-import { SOCIAL_PROVIDERS, type SupportedSocialProviderId } from "@/lib/auth/providers";
+import {
+  SOCIAL_PROVIDERS,
+  socialProviderLabel,
+  type SupportedSocialProviderId,
+} from "@/lib/auth/providers";
 
 type Props = {
   configuration: { configured: boolean; providers: Record<string, boolean> } | null;
@@ -8,6 +13,7 @@ type Props = {
   linking: boolean;
   busy: boolean;
   onConnect: (provider: SupportedSocialProviderId, linking: boolean) => void;
+  onSetup: (provider: SupportedSocialProviderId) => void;
 };
 
 export function AccountProviders({
@@ -17,7 +23,9 @@ export function AccountProviders({
   linking,
   busy,
   onConnect,
+  onSetup,
 }: Props) {
+  const [helpProvider, setHelpProvider] = useState<SupportedSocialProviderId | null>(null);
   const supported = SOCIAL_PROVIDERS.filter((provider) => provider.supported);
   const enabled = supported.filter(
     (provider) =>
@@ -30,6 +38,7 @@ export function AccountProviders({
     return (
       <section
         className="account-provider-options"
+        data-availability={availability}
         aria-label={linking ? "Connect sign-in services" : "Social sign-in options"}
       >
         {availability === "loading" ? (
@@ -45,13 +54,17 @@ export function AccountProviders({
   return (
     <section
       className="account-provider-options"
+      data-availability={availability}
       aria-label={linking ? "Connect sign-in services" : "Social sign-in options"}
     >
       <div className="account-providers">
-        {enabled.map((provider) => {
+        {supported.map((provider) => {
           if (!provider.supported) return null;
+          const ready =
+            configuration?.configured === true &&
+            configuration.providers[provider.providerId] === true;
           const connected = accounts.some((account) => account.providerId === provider.providerId);
-          if (linking && connected)
+          if (linking && connected && ready)
             return (
               <span className="account-provider-connected" key={provider.providerId}>
                 <Check size={14} aria-hidden="true" /> {provider.label} connected
@@ -63,40 +76,43 @@ export function AccountProviders({
               type="button"
               key={provider.providerId}
               disabled={busy}
-              onClick={() => onConnect(provider.providerId, linking)}
-              aria-label={`${linking ? "Connect" : "Continue with"} ${provider.label}`}
+              data-provider-action={ready ? "oauth" : "setup"}
+              onClick={() => {
+                if (ready) onConnect(provider.providerId, linking);
+                else {
+                  setHelpProvider(provider.providerId);
+                  onSetup(provider.providerId);
+                }
+              }}
+              aria-label={
+                ready
+                  ? `${linking ? "Connect" : "Continue with"} ${provider.label}`
+                  : `${provider.label} sign-in setup`
+              }
             >
               <span className="account-provider-mark" aria-hidden="true">
                 {provider.mark}
               </span>
               <span>
-                {provider.label}
-                <small>{linking ? "Connect account" : "Continue"}</small>
+                <span>{linking && connected ? `${provider.label} connected` : provider.label}</span>
+                <small>{ready ? (linking ? "Connect account" : "Continue") : "Setup needed"}</small>
               </span>
             </button>
           );
         })}
       </div>
-      {!enabled.length && (
-        <p className="account-provider-note">Social sign-in is not enabled on this website.</p>
+      {!enabled.length && !helpProvider && (
+        <p className="account-provider-note">
+          The website owner needs to enable social sign-in. Choose a service to view setup help.
+        </p>
       )}
-      <details className="account-service-details">
-        <summary>Sign-in services</summary>
-        <ul className="account-service-statuses">
-          {supported.map((provider) => {
-            const ready =
-              provider.supported &&
-              configuration?.configured === true &&
-              configuration.providers[provider.providerId] === true;
-            return (
-              <li key={provider.providerId}>
-                <span className="account-service-name">{provider.label}</span>
-                <span>{ready ? "Available" : "Not enabled"}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </details>
+      {helpProvider &&
+        !(configuration?.configured && configuration.providers[helpProvider] === true) && (
+          <p className="account-provider-note" role="status">
+            {socialProviderLabel(helpProvider)} sign-in is not enabled on this website yet. The
+            website owner must finish account and provider setup before one-click sign-in can work.
+          </p>
+        )}
     </section>
   );
 }
