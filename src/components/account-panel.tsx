@@ -271,10 +271,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     });
 
   const otherSignInOrigin =
-    configuration?.production &&
-    configuration.signInOrigin &&
-    currentOrigin &&
-    configuration.signInOrigin !== currentOrigin
+    configuration?.signInOrigin && currentOrigin && configuration.signInOrigin !== currentOrigin
       ? configuration.signInOrigin
       : null;
   const providerButtons = (linking: boolean) =>
@@ -689,14 +686,13 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             <span
               className={twoFactorEnabled ? "account-badge" : "account-badge account-badge-muted"}
             >
-              {twoFactorEnabled ? "Password 2FA on" : "Password 2FA off"}
+              {twoFactorEnabled ? "Account 2FA on" : "Account 2FA off"}
             </span>
           </div>
           <p className="account-help">
-            Authenticator codes protect email, username, and passkey sign-in, using the standard 6
-            digits and 30-second interval. Social sign-in uses the provider’s security settings;
-            enable MFA there too. Save the 16-character single-use backup codes to recover
-            authenticator access.
+            When enabled, authenticator codes protect email, username, passkey, and social sign-in.
+            Codes use 6 digits and a 30-second interval. Save your single-use backup codes to
+            recover authenticator access. You can also enable MFA with each social provider.
           </p>
           <label className="account-label">
             Current password

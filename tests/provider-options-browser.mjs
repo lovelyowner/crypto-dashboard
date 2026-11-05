@@ -468,28 +468,29 @@ try {
     },
   );
   await check(
-    "an immutable deployment directs social sign-in to its configured canonical origin",
+    "configured sign-in addresses guide production and development away from a wrong origin",
     async () => {
-      configuration = {
-        ...configuration,
-        production: true,
-        signInOrigin: "https://canonical.example",
-      };
-      await openLogin("/login?next=%2Fprovider-fixture", false);
-      const link = page.getByRole("link", {
-        name: "Open the configured sign-in website",
-        exact: true,
-      });
-      await link.waitFor();
-      assert.equal(
-        await link.getAttribute("href"),
-        "https://canonical.example/login?next=%2Fprovider-fixture",
-      );
-      assert.equal(await page.locator(".account-provider").count(), 0);
-      assert.equal(
-        await page.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
-        true,
-      );
+      for (const [production, canonical] of [
+        [true, "https://canonical.example"],
+        [false, "http://localhost:9998"],
+      ]) {
+        configuration = { ...configuration, production, signInOrigin: canonical };
+        await openLogin("/login?next=%2Fprovider-fixture", false);
+        const link = page.getByRole("link", {
+          name: "Open the configured sign-in website",
+          exact: true,
+        });
+        await link.waitFor();
+        assert.equal(
+          await link.getAttribute("href"),
+          `${canonical}/login?next=%2Fprovider-fixture`,
+        );
+        assert.equal(await page.locator(".account-provider").count(), 0);
+        assert.equal(
+          await page.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
+          true,
+        );
+      }
     },
   );
   await check(

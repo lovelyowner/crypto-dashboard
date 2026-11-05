@@ -90,7 +90,7 @@ try {
   const secret = await panel.locator(".account-setup code").innerText();
   await panel.getByLabel("Authenticator code", { exact: true }).fill(totp(secret));
   await panel.getByRole("button", { name: "Verify & activate 2FA", exact: true }).click();
-  await panel.getByText("Password 2FA on", { exact: true }).waitFor();
+  await panel.getByText("Account 2FA on", { exact: true }).waitFor();
   await check(
     "authenticator enrollment verifies a real app code and presents single-use recovery codes",
     async () => {

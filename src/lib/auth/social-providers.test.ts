@@ -6,6 +6,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import {
   configuredSocialProviders,
   socialProviderAvailability,
+  socialSignInOrigin,
 } from "./social-providers.server.ts";
 import { accountTwoFactor } from "./passkeys.server.ts";
 import { sessionDurationPlugin } from "./session-duration.ts";
@@ -17,6 +18,26 @@ const appCredentials = {
   TWITCH_CLIENT_ID: "twitch-fixture-client",
   TWITCH_CLIENT_SECRET: "twitch-fixture-secret",
 };
+
+test("OAuth origin guidance preserves default local aliases only while social providers are absent", () => {
+  const providers = configuredSocialProviders(appCredentials);
+  assert.equal(socialSignInOrigin(null, "http://localhost:8080", false, {}), null);
+  assert.equal(
+    socialSignInOrigin(null, "http://localhost:8080", false, providers),
+    "http://localhost:8080",
+  );
+  assert.equal(socialSignInOrigin(null, "http://localhost:8080", true, providers), null);
+  for (const production of [true, false])
+    assert.equal(
+      socialSignInOrigin(
+        "https://canonical.example",
+        "http://localhost:8080",
+        production,
+        providers,
+      ),
+      "https://canonical.example",
+    );
+});
 
 test("social adapters require complete credential pairs and public flags require configured accounts", () => {
   assert.deepEqual(configuredSocialProviders({}), {});

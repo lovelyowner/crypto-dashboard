@@ -15,7 +15,11 @@ import {
 } from "./policy";
 import { sessionDurationPlugin } from "./session-duration";
 import { resolveDeploymentConfiguration } from "../deployment-config";
-import { configuredSocialProviders, socialProviderAvailability } from "./social-providers.server";
+import {
+  configuredSocialProviders,
+  socialProviderAvailability,
+  socialSignInOrigin,
+} from "./social-providers.server";
 import { readAccountSetup } from "./setup";
 import {
   accountPasskeys,
@@ -50,6 +54,7 @@ const secret =
   configuredSecret ?? (production ? randomBytes(32).toString("hex") : developmentSecret());
 
 const socialProviders = configuredSocialProviders(process.env);
+const signInOrigin = socialSignInOrigin(authOrigin, passkeyOrigin, production, socialProviders);
 const emailConfigured = Boolean(env("RESEND_API_KEY") && env("AUTH_EMAIL_FROM"));
 
 export function publicAuthConfiguration() {
@@ -61,7 +66,7 @@ export function publicAuthConfiguration() {
     providers: socialProviderAvailability(socialProviders, authConfigured),
     production,
     setup: readAccountSetup(process.env, production),
-    ...(authOrigin ? { signInOrigin: authOrigin } : {}),
+    ...(signInOrigin ? { signInOrigin } : {}),
   };
 }
 

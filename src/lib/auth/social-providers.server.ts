@@ -36,3 +36,15 @@ export function socialProviderAvailability(
     ]),
   ) as Record<SupportedSocialProvider, boolean>;
 }
+
+/** OAuth must start on the same validated origin that receives its state cookie. */
+export function socialSignInOrigin(
+  explicitOrigin: string | null,
+  localDefaultOrigin: string,
+  production: boolean,
+  providers: SocialProviderConfiguration,
+): string | null {
+  return (
+    explicitOrigin ?? (!production && Object.keys(providers).length ? localDefaultOrigin : null)
+  );
+}

@@ -109,3 +109,7 @@ Provider errors return to `/login` with allowlisted, user-facing copy; provider 
 Use the configured stable sign-in origin. An immutable Vercel deployment and its branch alias cannot share host-only OAuth state cookies. The UI links to the configured origin when they differ rather than trusting arbitrary preview hosts. The preview footer also exposes the platform-provided branch link when available.
 
 **Website sign-in setup** shows public presence checks for account storage, signing security, and the sign-in origin, and can copy a checklist of variable names/statuses. It never returns secrets and does not test database/provider connectivity. Preview still requires the isolated `PREVIEW_DATABASE_URL`, `PREVIEW_BETTER_AUTH_SECRET`, and `PREVIEW_BETTER_AUTH_URL` trio; each desired social service needs its own registered ID/secret and callback.
+
+### Local OAuth addresses
+
+When any OAuth application is configured locally, configuration discovery advertises the actual callback origin (the explicit `BETTER_AUTH_URL`, or `http://localhost:8080` by default). Use that exact address to start social sign-in: OAuth state cookies cannot move between `127.0.0.1` and `localhost`. Wrong-address guidance also applies in development. Without OAuth apps or an explicit origin, default local email/password access on either loopback address remains available.
