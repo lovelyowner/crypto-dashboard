@@ -20,7 +20,13 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 const errors = [];
+const signInRequests = [];
 page.on("pageerror", (error) => errors.push(error.message));
+page.on("request", (request) => {
+  const path = new URL(request.url()).pathname;
+  if (["/api/auth/sign-up/email", "/api/auth/sign-in/username"].includes(path))
+    signInRequests.push({ path, duration: request.headers()["x-fathom-session-duration"] });
+});
 await context.route("**/*", (route) =>
   new URL(route.request().url()).origin === origin
     ? route.continue()
@@ -67,21 +73,48 @@ try {
   await page.goto(baseURL, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Open account", exact: true }).click();
   const panel = page.locator(".account-panel");
+  await panel.getByRole("button", { name: "Sign in", exact: true }).waitFor();
+  assert.equal(
+    await panel
+      .getByRole("heading")
+      .evaluateAll((headings) =>
+        headings.every((heading) => heading.classList.contains("sr-only")),
+      ),
+    true,
+  );
+  assert.equal(await panel.getByRole("combobox").count(), 0);
+  assert.equal(
+    await panel.getByRole("checkbox", { name: "Remember me in this browser", exact: true }).count(),
+    1,
+  );
   await panel.getByRole("button", { name: "New here? Create an account", exact: true }).click();
+  assert.equal(
+    await panel
+      .getByRole("heading")
+      .evaluateAll((headings) =>
+        headings.every((heading) => heading.classList.contains("sr-only")),
+      ),
+    true,
+  );
+  assert.equal(await panel.getByRole("combobox").count(), 0);
   await panel.locator('input[autocomplete="email"]').fill(email);
   await panel.locator('input[autocomplete="username"]').fill(username);
   await panel.locator('input[autocomplete="new-password"]').fill(password);
-  await panel.getByRole("combobox").selectOption("1h");
   await panel.getByRole("button", { name: "Create account", exact: true }).click();
   await panel.getByRole("button", { name: "Sign out", exact: true }).waitFor();
   await check(
-    "Unicode signup updates the signed-in account UI and actual one-hour session",
+    "Unicode signup updates the signed-in account UI and actual default one-day session",
     async () => {
       assert.equal(await panel.locator(".account-identity strong").innerText(), username);
       const session = await getSession();
       const remaining = new Date(session.session.expiresAt).getTime() - Date.now();
-      assert.ok(remaining > 3_570_000 && remaining <= 3_600_000);
+      assert.ok(remaining > 86_370_000 && remaining <= 86_400_000);
+      assert.equal(
+        signInRequests.find((request) => request.path === "/api/auth/sign-up/email")?.duration,
+        "1d",
+      );
       assert.equal(session.user.username, username.normalize("NFC"));
+      await panel.getByRole("heading", { name: "Account & security", exact: true }).waitFor();
     },
   );
   await panel.locator('input[autocomplete="current-password"]').fill(password);
@@ -208,11 +241,17 @@ try {
   await panel.getByRole("button", { name: "Username", exact: true }).click();
   await panel.locator('input[autocomplete="username"]').fill(username);
   await panel.locator('input[autocomplete="current-password"]').fill(password);
-  await panel.getByRole("combobox").selectOption("1h");
+  assert.equal(await panel.getByRole("combobox").count(), 0);
   await panel.getByRole("button", { name: "Sign in", exact: true }).click();
   await panel.getByLabel("Authenticator code", { exact: true }).waitFor();
   await check("username/password login waits for the enrolled authenticator", async () => {
     assert.ok(!(await getSession())?.user);
+    await panel.getByRole("heading", { name: "Verify it’s you", exact: true }).waitFor();
+    assert.equal(await panel.locator(".account-provider-options").count(), 0);
+    assert.equal(
+      signInRequests.find((request) => request.path === "/api/auth/sign-in/username")?.duration,
+      "1d",
+    );
     assert.equal(
       await panel.getByRole("button", { name: "Verify & sign in", exact: true }).count(),
       1,
@@ -222,12 +261,12 @@ try {
   await panel.getByRole("button", { name: "Verify & sign in", exact: true }).click();
   await panel.getByRole("button", { name: "Sign out", exact: true }).waitFor();
   await check(
-    "authenticator login restores the intended account and selected session deadline",
+    "authenticator login restores the intended account and default one-day session deadline",
     async () => {
       const session = await getSession();
       assert.equal(session.user.username, username.normalize("NFC"));
       const remaining = new Date(session.session.expiresAt).getTime() - Date.now();
-      assert.ok(remaining > 3_570_000 && remaining <= 3_600_000);
+      assert.ok(remaining > 86_370_000 && remaining <= 86_400_000);
       assert.deepEqual(errors, []);
     },
   );

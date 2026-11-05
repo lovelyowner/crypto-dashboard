@@ -34,23 +34,6 @@ export function AccountProviders({
       configuration.providers[provider.providerId] === true,
   );
 
-  if (availability !== "ready")
-    return (
-      <section
-        className="account-provider-options"
-        data-availability={availability}
-        aria-label={linking ? "Connect sign-in services" : "Social sign-in options"}
-      >
-        {availability === "loading" ? (
-          <p className="account-provider-note" role="status">
-            Checking sign-in services…
-          </p>
-        ) : (
-          <p className="account-provider-note">Social sign-in is temporarily unavailable.</p>
-        )}
-      </section>
-    );
-
   return (
     <section
       className="account-provider-options"
@@ -61,6 +44,7 @@ export function AccountProviders({
         {supported.map((provider) => {
           if (!provider.supported) return null;
           const ready =
+            availability === "ready" &&
             configuration?.configured === true &&
             configuration.providers[provider.providerId] === true;
           const connected = accounts.some((account) => account.providerId === provider.providerId);
@@ -75,9 +59,12 @@ export function AccountProviders({
               className="account-provider"
               type="button"
               key={provider.providerId}
-              disabled={busy}
-              data-provider-action={ready ? "oauth" : "setup"}
+              disabled={busy || availability !== "ready"}
+              data-provider-action={
+                availability !== "ready" ? "pending" : ready ? "oauth" : "setup"
+              }
               onClick={() => {
+                if (availability !== "ready") return;
                 if (ready) onConnect(provider.providerId, linking);
                 else {
                   setHelpProvider(provider.providerId);
@@ -85,9 +72,11 @@ export function AccountProviders({
                 }
               }}
               aria-label={
-                ready
-                  ? `${linking ? "Connect" : "Continue with"} ${provider.label}`
-                  : `${provider.label} sign-in setup`
+                availability !== "ready"
+                  ? `${provider.label} sign-in`
+                  : ready
+                    ? `${linking ? "Connect" : "Continue with"} ${provider.label}`
+                    : `${provider.label} sign-in setup`
               }
             >
               <span className="account-provider-mark" aria-hidden="true">
@@ -95,18 +84,28 @@ export function AccountProviders({
               </span>
               <span>
                 <span>{linking && connected ? `${provider.label} connected` : provider.label}</span>
-                <small>{ready ? (linking ? "Connect account" : "Continue") : "Setup needed"}</small>
+                {availability === "ready" && (
+                  <small>
+                    {ready ? (linking ? "Connect account" : "Continue") : "Setup needed"}
+                  </small>
+                )}
               </span>
             </button>
           );
         })}
       </div>
-      {!enabled.length && !helpProvider && (
+      {availability === "loading" && (
+        <p className="account-provider-note" role="status">
+          Checking sign-in services…
+        </p>
+      )}
+      {availability === "ready" && !enabled.length && !helpProvider && (
         <p className="account-provider-note">
           The website owner needs to enable social sign-in. Choose a service to view setup help.
         </p>
       )}
-      {helpProvider &&
+      {availability === "ready" &&
+        helpProvider &&
         !(configuration?.configured && configuration.providers[helpProvider] === true) && (
           <p className="account-provider-note" role="status">
             {socialProviderLabel(helpProvider)} sign-in is not enabled on this website yet. The

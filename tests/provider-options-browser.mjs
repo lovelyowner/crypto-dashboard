@@ -157,6 +157,25 @@ async function assertNoProviderActions() {
   for (const name of unsupported)
     assert.equal(await page.getByText(name, { exact: true }).count(), 0);
 }
+async function assertPendingChoices() {
+  assert.equal(await page.locator(".account-provider[data-provider-action='pending']").count(), 5);
+  assert.equal(await page.locator(".account-provider:disabled").count(), 5);
+  assert.equal(await page.locator(".account-provider[data-provider-action='oauth']").count(), 0);
+  assert.equal(await page.locator(".account-provider[data-provider-action='setup']").count(), 0);
+  assert.deepEqual(
+    await page
+      .locator(".account-provider")
+      .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))),
+    supported.map(([, label]) => `${label} sign-in`),
+  );
+  for (const [, label] of supported) {
+    const button = page.getByRole("button", { name: `${label} sign-in`, exact: true });
+    assert.equal(await button.isVisible(), true);
+    await button.dispatchEvent("click");
+  }
+  for (const name of unsupported)
+    assert.equal(await page.getByText(name, { exact: true }).count(), 0);
+}
 async function assertChoicesBeforeCredentials() {
   assert.equal(
     await page.locator(".account-provider-options").evaluate((choices) => {
@@ -167,6 +186,65 @@ async function assertChoicesBeforeCredentials() {
     }),
     true,
     "Social sign-in choices appear before the credential form",
+  );
+}
+async function assertMinimalSignIn() {
+  const panel = page.locator(".account-panel");
+  await panel.locator(".account-form").waitFor();
+  assert.equal(
+    await panel
+      .getByRole("heading")
+      .evaluateAll((headings) =>
+        headings.every((heading) => heading.classList.contains("sr-only")),
+      ),
+    true,
+  );
+  assert.equal(
+    await panel
+      .locator(
+        ".account-heading:visible, .account-icon:visible, .account-eyebrow:visible, .account-intro:visible, .account-divider:visible, .account-footnote:visible",
+      )
+      .count(),
+    0,
+  );
+  assert.equal(await panel.getByRole("combobox").count(), 0);
+  assert.equal(await panel.getByText("Sign in again after", { exact: true }).count(), 0);
+  assert.equal(
+    await panel.getByRole("checkbox", { name: "Remember me in this browser", exact: true }).count(),
+    1,
+  );
+  assert.doesNotMatch(
+    await panel.innerText(),
+    /selected server deadline|server ends this session|browser-session cookie|NFKC normalization|NFC normalization|12–256 characters/i,
+  );
+  await assertChoicesBeforeCredentials();
+  assert.equal(
+    await panel.evaluate((root) => {
+      const grid = root.querySelector(".account-providers");
+      if (!grid) return false;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent.trim()) continue;
+        const element = node.parentElement;
+        if (!element || !element.getClientRects().length || element.closest(".sr-only")) continue;
+        return grid.contains(element);
+      }
+      return false;
+    }),
+    true,
+    "Provider buttons are the first visible text in the ordinary sign-in panel",
+  );
+}
+async function assertFeedbackBelowChoices(feedback) {
+  assert.equal(
+    await feedback.evaluate((element) => {
+      const grid = document.querySelector(".account-providers");
+      return Boolean(
+        grid && grid.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }),
+    true,
+    "Availability and setup feedback follows the provider buttons",
   );
 }
 async function setupHelp(label) {
@@ -180,6 +258,7 @@ async function setupHelp(label) {
     .getByRole("status")
     .filter({ hasText: /website owner/i })
     .waitFor();
+  await assertFeedbackBelowChoices(page.getByRole("status").filter({ hasText: /website owner/i }));
   assert.equal(providerRequests.length, requestsBefore, "Setup help never calls the OAuth SDK");
 }
 const loadingOptions = () =>
@@ -217,10 +296,15 @@ try {
   await openLogin("/login", false);
   await loadingOptions().waitFor();
   await check(
-    "a pending availability check has one status and no stale or planned provider actions",
+    "a pending availability check keeps five disabled choices above one compact status",
     async () => {
+      const requestsBefore = providerRequests.length;
       assert.equal(await loadingOptions().count(), 1);
-      await assertNoProviderActions();
+      await assertPendingChoices();
+      assert.equal(providerRequests.length, requestsBefore);
+      await assertMinimalSignIn();
+      await assertFeedbackBelowChoices(loadingOptions());
+      assert.equal(await page.locator(".account-setup-details").count(), 0);
       assert.equal(await page.locator(".account-service-statuses li").count(), 0);
     },
   );
@@ -243,7 +327,7 @@ try {
       assert.equal(await page.locator(".account-service-statuses li").count(), 0);
       for (const label of unsupported)
         assert.equal(await page.getByText(label, { exact: true }).count(), 0);
-      await assertChoicesBeforeCredentials();
+      await assertMinimalSignIn();
       assert.equal(await loadingOptions().count(), 0);
     },
   );
@@ -301,15 +385,33 @@ try {
     configurationMode = mode;
     await openLogin("/login", false);
     await failedOptions().waitFor();
-    await check(`${description} end loading and offer retry without provider actions`, async () => {
-      assert.equal(await failedOptions().count(), 1);
-      assert.equal(await loadingOptions().count(), 0);
-      await assertNoProviderActions();
-      assert.equal(
-        await page.getByRole("button", { name: "Retry sign-in options", exact: true }).isEnabled(),
-        true,
-      );
-    });
+    await check(
+      `${description} retain disabled choices and offer a compact retry below them`,
+      async () => {
+        const requestsBefore = providerRequests.length;
+        assert.equal(await failedOptions().count(), 1);
+        assert.equal(await loadingOptions().count(), 0);
+        await assertPendingChoices();
+        assert.equal(providerRequests.length, requestsBefore);
+        await assertMinimalSignIn();
+        await assertFeedbackBelowChoices(failedOptions());
+        assert.equal(
+          await page
+            .getByRole("button", { name: "Retry sign-in options", exact: true })
+            .isEnabled(),
+          true,
+        );
+        assert.equal(
+          await page
+            .getByRole("button", { name: "Retry sign-in options", exact: true })
+            .innerText(),
+          "Retry",
+        );
+        await assertFeedbackBelowChoices(
+          page.getByRole("button", { name: "Retry sign-in options", exact: true }),
+        );
+      },
+    );
   }
 
   configuration = { ...configuration, providers: allProviders };
@@ -321,7 +423,9 @@ try {
     async () => {
       assert.equal(await failedOptions().count(), 0);
       assert.equal(await loadingOptions().count(), 1);
-      await assertNoProviderActions();
+      const requestsBefore = providerRequests.length;
+      await assertPendingChoices();
+      assert.equal(providerRequests.length, requestsBefore);
       configurationMode = "ready";
       await releaseConfiguration(configuration);
       await readyConfiguration();
@@ -339,10 +443,10 @@ try {
     "a hanging availability fetch times out and its late response cannot enable stale actions",
     async () => {
       assert.equal(await loadingOptions().count(), 0);
-      await assertNoProviderActions();
+      await assertPendingChoices();
       await releaseConfiguration(configuration);
       assert.equal(await failedOptions().count(), 1);
-      assert.equal(await page.locator(".account-provider").count(), 0);
+      await assertPendingChoices();
       configurationMode = "ready";
       await page.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
       await readyConfiguration();
@@ -351,23 +455,21 @@ try {
   );
 
   await openLogin("/login?next=%2Fprovider-fixture");
-  await page.locator(".account-panel").getByRole("combobox").selectOption("7d");
   await check(
-    "all five configured login actions initiate the correct SDK provider with safe callbacks and duration",
+    "all five configured login actions initiate the correct SDK provider with safe callbacks and the default duration",
     async () => {
       assert.equal(await page.locator(".account-provider").count(), 5);
-      await assertChoicesBeforeCredentials();
+      await assertMinimalSignIn();
       for (const [id, label] of supported) {
         const request = await initiate(id, label);
         assert.equal(request.path, "sign-in/social");
         assert.equal(request.body.provider, id);
         assert.equal(callbackPath(request).searchParams.get("next"), "/provider-fixture");
-        assert.equal(request.duration, "7d");
+        assert.equal(request.duration, "1d");
       }
     },
   );
   await page.getByRole("button", { name: "New here? Create an account", exact: true }).click();
-  await page.locator(".account-panel").getByRole("combobox").selectOption("1h");
   await check(
     "signup keeps email registration and the same five working social actions",
     async () => {
@@ -377,12 +479,12 @@ try {
       );
       assert.equal(await page.locator('input[autocomplete="email"]').count(), 1);
       assert.equal(await page.locator(".account-provider").count(), 5);
-      await assertChoicesBeforeCredentials();
+      await assertMinimalSignIn();
       for (const [id, label] of supported) {
         const request = await initiate(id, label);
         assert.equal(request.body.provider, id);
         assert.equal(callbackPath(request).searchParams.get("next"), "/provider-fixture");
-        assert.equal(request.duration, "1h");
+        assert.equal(request.duration, "1d");
       }
     },
   );
@@ -390,6 +492,10 @@ try {
   await check("recovery and reset forms keep the sign-in choice block hidden", async () => {
     await page.getByRole("button", { name: "Forgot password?", exact: true }).click();
     await page.getByRole("heading", { name: "Recover access", exact: true }).waitFor();
+    assert.equal(
+      await page.locator(".account-intro:visible, .account-footnote:visible").count(),
+      0,
+    );
     await assertNoProviderActions();
     assert.equal(await page.locator(".account-provider-options").count(), 0);
     assert.equal(
@@ -398,6 +504,11 @@ try {
     );
     await openLogin("/login?reset=1&token=provider-fixture-reset", false);
     await page.getByRole("button", { name: "Set new password", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Recover access", exact: true }).waitFor();
+    assert.equal(
+      await page.locator(".account-intro:visible, .account-footnote:visible").count(),
+      0,
+    );
     await assertNoProviderActions();
     assert.equal(await page.locator(".account-provider-options").count(), 0);
   });
@@ -409,6 +520,13 @@ try {
     "signed-in accounts keep independent recovery and show connected services without duplicate connect actions",
     async () => {
       await page.getByText("GitHub connected", { exact: true }).waitFor();
+      await page.getByRole("heading", { name: "Account & security", exact: true }).waitFor();
+      await page
+        .getByText(
+          "Keep independent ways to sign in, so losing a social account doesn’t lock you out.",
+          { exact: true },
+        )
+        .waitFor();
       assert.equal(
         await page.getByRole("button", { name: "Connect GitHub", exact: true }).count(),
         0,
@@ -526,6 +644,11 @@ try {
       assert.equal(new URL(page.url()).searchParams.has("error"), false);
       await openLogin("/login?twoFactor=1&next=%2Fprovider-fixture", false);
       await page.getByLabel("Authenticator code", { exact: true }).waitFor();
+      await page.getByRole("heading", { name: "Verify it’s you", exact: true }).waitFor();
+      assert.equal(
+        await page.locator(".account-intro:visible, .account-footnote:visible").count(),
+        0,
+      );
       await page.getByRole("button", { name: "Use a backup code", exact: true }).click();
       await page.getByLabel("Single-use backup code", { exact: true }).waitFor();
       assert.equal(new URL(page.url()).searchParams.has("twoFactor"), false);
@@ -601,6 +724,7 @@ try {
       };
       await openLogin();
       const requestsBefore = providerRequests.length;
+      assert.equal(await page.locator(".account-setup-details").count(), 0);
       await page.getByRole("button", { name: "Google sign-in setup", exact: true }).click();
       const details = page.locator(".account-setup-details");
       assert.equal(await details.getAttribute("open"), "");

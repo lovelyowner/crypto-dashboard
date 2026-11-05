@@ -4,18 +4,12 @@ import { twoFactor } from "better-auth/plugins";
 import type { BetterAuthPlugin } from "better-auth";
 import { isFreshAccountSession } from "./policy";
 import { safeAccountReturnPath } from "./return-to";
+import { passkeyConfiguration } from "./passkey-configuration";
+
+export { passkeyConfiguration } from "./passkey-configuration";
 
 export const PASSKEY_AUTHENTICATION_PATH = "/passkey/verify-authentication";
 export const PASSKEY_REMEMBER_HEADER = "x-fathom-remember-me";
-
-/** Exact RP host and origins, never derived from a request's Host/Origin header. */
-export function passkeyConfiguration(origin: string) {
-  const url = new URL(origin);
-  const enabled =
-    url.protocol === "https:" ||
-    (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname));
-  return { enabled, rpID: url.hostname, origin: [url.origin] };
-}
 
 export function accountPasskeys(origin: string) {
   const configuration = passkeyConfiguration(origin);

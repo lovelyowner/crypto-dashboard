@@ -14,7 +14,6 @@ import {
   normalizeUsername,
   DEFAULT_SESSION_DURATION,
   SESSION_DURATION_HEADER,
-  SESSION_DURATION_OPTIONS,
   type SessionDuration,
 } from "@/lib/auth/policy";
 import { AccountRecoveryReadiness, AccountSessions } from "./account-sessions";
@@ -73,7 +72,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [sessionDuration, setSessionDuration] = useState<SessionDuration>(DEFAULT_SESSION_DURATION);
+  const sessionDuration = DEFAULT_SESSION_DURATION;
   const [challenge, setChallenge] = useState(false);
   const [backupMode, setBackupMode] = useState(false);
   const [code, setCode] = useState("");
@@ -287,7 +286,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         availability={configurationStatus}
         accounts={accounts}
         linking={linking}
-        busy={busy}
+        busy={busy || isPending}
         onConnect={connect}
         onSetup={(provider) =>
           setSetupRequest((value) => ({ provider, version: (value?.version ?? 0) + 1 }))
@@ -295,53 +294,128 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       />
     );
 
+  const signInChoices = !user && !challenge && (mode === "login" || mode === "signup") && (
+    <>
+      {providerButtons(false)}
+      {mode === "login" &&
+        configuration?.configured &&
+        configuration.passkeys &&
+        passkeySupported && (
+          <>
+            <button
+              type="button"
+              className="account-secondary account-passkey-signin"
+              disabled={busy || isPending}
+              onClick={() =>
+                void run(async () => {
+                  const controller = beginPasskeyCeremony();
+                  passkeyOperation.current = controller;
+                  setPasskeyBusy(true);
+                  try {
+                    const result = await authClient.signIn.passkey({
+                      fetchOptions: {
+                        signal: controller.signal,
+                        headers: {
+                          [SESSION_DURATION_HEADER]: sessionDuration,
+                          "x-fathom-remember-me": String(rememberMe),
+                        },
+                      },
+                    });
+                    if (controller.signal.aborted) return;
+                    if (result.error)
+                      throw new Error(
+                        result.error.message ||
+                          "Passkey sign-in was cancelled. Retry or use another method.",
+                      );
+                    if (
+                      (result.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect
+                    ) {
+                      setChallenge(true);
+                      return;
+                    }
+                    await refetch();
+                    setNotice("Signed in with your passkey.");
+                  } finally {
+                    if (passkeyOperation.current === controller) passkeyOperation.current = null;
+                    endPasskeyCeremony(controller);
+                    setPasskeyBusy(false);
+                  }
+                })
+              }
+            >
+              <KeyRound size={15} /> Sign in with a passkey
+            </button>
+            {passkeyBusy && (
+              <button
+                className="account-text-button"
+                type="button"
+                onClick={() => {
+                  passkeyOperation.current?.abort();
+                  cancelPasskeyCeremony();
+                }}
+              >
+                Cancel passkey sign-in
+              </button>
+            )}
+          </>
+        )}
+    </>
+  );
+
   return (
     <section className="account-panel">
-      <div className="account-heading">
-        <div className="account-icon">
-          <ShieldCheck size={23} />
-        </div>
-        <div>
-          <p className="account-eyebrow">YOUR ACCOUNT</p>
-          <h2>
-            {user
-              ? "Account & security"
-              : challenge
-                ? "Verify it’s you"
-                : mode === "signup"
-                  ? "Create your account"
-                  : mode === "recover" || mode === "reset"
-                    ? "Recover access"
-                    : "Welcome back"}
-          </h2>
-        </div>
-      </div>
-      <p className="account-intro">
-        {user
-          ? "Keep independent ways to sign in, so losing a social account doesn’t lock you out."
-          : "An account is optional. Your watched addresses and locally encrypted wallets stay in this browser."}
-      </p>
+      {user || challenge || mode === "recover" || mode === "reset" ? (
+        <>
+          <div className="account-heading">
+            <div className="account-icon">
+              <ShieldCheck size={23} />
+            </div>
+            <div>
+              <p className="account-eyebrow">YOUR ACCOUNT</p>
+              <h2>
+                {user
+                  ? "Account & security"
+                  : challenge
+                    ? "Verify it’s you"
+                    : mode === "signup"
+                      ? "Create your account"
+                      : mode === "recover" || mode === "reset"
+                        ? "Recover access"
+                        : "Welcome back"}
+              </h2>
+            </div>
+          </div>
+          {user && (
+            <p className="account-intro">
+              Keep independent ways to sign in, so losing a social account doesn’t lock you out.
+            </p>
+          )}
+        </>
+      ) : (
+        <h2 className="sr-only">{mode === "signup" ? "Create account" : "Sign in"}</h2>
+      )}
+      {signInChoices}
       {(error || configurationError) && (
-        <p className="account-message account-error" role="alert">
+        <p className={error ? "account-message account-error" : "account-help"} role="alert">
           {error || configurationError}
         </p>
       )}
       {configurationStatus === "unavailable" && (
         <button
-          className="account-secondary"
+          className="account-text-button"
+          aria-label="Retry sign-in options"
           type="button"
           onClick={() => {
             setError("");
             reloadConfiguration();
           }}
         >
-          Retry sign-in options
+          Retry
         </button>
       )}
       {configuration && !configuration.configured && (
-        <p className="account-message account-error" role="alert">
-          Accounts are not enabled on this website yet. Public tracking and local wallets still
-          work.
+        <p className="account-help" role="alert">
+          Account sign-in needs website setup.
         </p>
       )}
       {otherSignInOrigin && (
@@ -357,7 +431,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           original website address.
         </p>
       )}
-      <AccountSetupStatus configuration={configuration} request={setupRequest} />
+      {setupRequest && !challenge && (user || mode === "login" || mode === "signup") && (
+        <AccountSetupStatus configuration={configuration} request={setupRequest} />
+      )}
       {notice && (
         <p className="account-message account-success" role="status">
           {notice}
@@ -369,77 +445,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         </p>
       ) : !user || mode === "reset" ? (
         <>
-          {!challenge && (mode === "login" || mode === "signup") && (
-            <>
-              <div className="account-divider">CONTINUE WITH</div>
-              {mode === "login" &&
-                configuration?.configured &&
-                configuration.passkeys &&
-                passkeySupported && (
-                  <>
-                    <button
-                      type="button"
-                      className="account-secondary account-passkey-signin"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          const controller = beginPasskeyCeremony();
-                          passkeyOperation.current = controller;
-                          setPasskeyBusy(true);
-                          try {
-                            const result = await authClient.signIn.passkey({
-                              fetchOptions: {
-                                signal: controller.signal,
-                                headers: {
-                                  [SESSION_DURATION_HEADER]: sessionDuration,
-                                  "x-fathom-remember-me": String(rememberMe),
-                                },
-                              },
-                            });
-                            if (controller.signal.aborted) return;
-                            if (result.error)
-                              throw new Error(
-                                result.error.message ||
-                                  "Passkey sign-in was cancelled. Retry or use another method.",
-                              );
-                            if (
-                              (result.data as { twoFactorRedirect?: boolean } | null)
-                                ?.twoFactorRedirect
-                            ) {
-                              setChallenge(true);
-                              return;
-                            }
-                            await refetch();
-                            setNotice("Signed in with your passkey.");
-                          } finally {
-                            if (passkeyOperation.current === controller)
-                              passkeyOperation.current = null;
-                            endPasskeyCeremony(controller);
-                            setPasskeyBusy(false);
-                          }
-                        })
-                      }
-                    >
-                      <KeyRound size={15} /> Sign in with a passkey
-                    </button>
-                    {passkeyBusy && (
-                      <button
-                        className="account-text-button"
-                        type="button"
-                        onClick={() => {
-                          passkeyOperation.current?.abort();
-                          cancelPasskeyCeremony();
-                        }}
-                      >
-                        Cancel passkey sign-in
-                      </button>
-                    )}
-                  </>
-                )}
-              {providerButtons(false)}
-              <div className="account-divider">OR USE A PASSWORD</div>
-            </>
-          )}
           <form className="account-form" onSubmit={submit}>
             {challenge ? (
               <>
@@ -519,10 +524,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                       onChange={(event) => setUsername(event.target.value)}
                       required
                     />
-                    <small>
-                      Symbols, spaces, and Unicode welcome. Case-sensitive; NFC normalization
-                      applies.
-                    </small>
                   </label>
                 )}
                 {mode !== "recover" && (
@@ -537,32 +538,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                       onChange={(event) => setPassword(event.target.value)}
                       required
                     />
-                    <small>
-                      {mode === "signup" || mode === "reset"
-                        ? "12–256 characters. Any symbols; no required character categories. Passwords use Unicode NFKC normalization."
-                        : ""}
-                    </small>
-                  </label>
-                )}
-                {(mode === "login" || mode === "signup") && (
-                  <label>
-                    Sign in again after
-                    <select
-                      value={sessionDuration}
-                      onChange={(event) =>
-                        setSessionDuration(event.target.value as SessionDuration)
-                      }
-                    >
-                      {SESSION_DURATION_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <small>
-                      The server ends this session at the chosen time, including after two-factor
-                      verification.
-                    </small>
                   </label>
                 )}
                 {(mode === "login" || mode === "signup") && (
@@ -574,13 +549,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                     />
                     Remember me in this browser
                   </label>
-                )}
-                {(mode === "login" || mode === "signup") && (
-                  <p className="account-help">
-                    Unchecked: a browser-session cookie. Browser restore may keep that cookie; the
-                    selected server deadline still applies. Social providers may also keep their own
-                    sessions.
-                  </p>
                 )}
               </>
             )}
@@ -956,10 +924,12 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           <AccountDataExport key={`export:${user.id}`} />
         </>
       )}
-      <p className="account-footnote">
-        Account recovery does not recover a lost wallet passphrase or recovery phrase. Identity
-        verification and service-held keys are not enabled.
-      </p>
+      {user && (
+        <p className="account-footnote">
+          Account recovery does not recover a lost wallet passphrase or recovery phrase. Identity
+          verification and service-held keys are not enabled.
+        </p>
+      )}
       <button className="account-text-button account-done" type="button" onClick={onClose}>
         Back to dashboard
       </button>

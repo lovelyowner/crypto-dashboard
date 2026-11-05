@@ -244,11 +244,32 @@ async function runChecks() {
     await check("hosted account panel clearly requires setup and disables sign-in", async () => {
       await dialog
         .getByRole("alert")
-        .filter({ hasText: /Accounts are not enabled on this website yet/ })
+        .filter({ hasText: /^Account sign-in needs website setup\.$/ })
         .waitFor();
       assert.equal(
         await dialog.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
         true,
+      );
+      assert.equal(
+        await dialog
+          .getByRole("heading")
+          .evaluateAll((headings) =>
+            headings.every((heading) => heading.classList.contains("sr-only")),
+          ),
+        true,
+      );
+      assert.equal(await dialog.getByRole("combobox").count(), 0);
+      assert.equal(
+        await dialog
+          .locator(".account-heading:visible, .account-intro:visible, .account-divider:visible")
+          .count(),
+        0,
+      );
+      assert.equal(
+        await dialog
+          .getByRole("checkbox", { name: "Remember me in this browser", exact: true })
+          .count(),
+        1,
       );
     });
     await check(
@@ -264,6 +285,20 @@ async function runChecks() {
           0,
         );
         assert.equal(await dialog.locator(".account-provider:disabled").count(), 0);
+        assert.equal(await dialog.locator(".account-setup-details").count(), 0);
+        assert.equal(
+          await dialog.evaluate((root) => {
+            const grid = root.querySelector(".account-providers");
+            const alert = root.querySelector('[role="alert"]');
+            return Boolean(
+              grid &&
+              alert &&
+              grid.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING,
+            );
+          }),
+          true,
+          "Hosted account setup feedback follows the social buttons",
+        );
         assert.equal(await dialog.getByText("Sign-in services", { exact: true }).count(), 0);
         assert.equal(
           await dialog.locator(".account-provider-options .account-service-statuses").count(),
@@ -293,8 +328,18 @@ async function runChecks() {
         await page.goto(`${baseURL}${path}`, { waitUntil: "networkidle" });
         await page
           .getByRole("dialog")
-          .getByRole("heading", { name: "Welcome back", exact: true })
+          .getByRole("button", { name: "Google sign-in setup", exact: true })
           .waitFor();
+        assert.equal(
+          await page
+            .getByRole("dialog")
+            .getByRole("heading")
+            .evaluateAll((headings) =>
+              headings.every((heading) => heading.classList.contains("sr-only")),
+            ),
+          true,
+        );
+        assert.equal(await page.getByRole("dialog").getByRole("combobox").count(), 0);
       }
     });
     await check("direct hosted password-reset return opens recovery form", async () => {

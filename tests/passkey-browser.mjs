@@ -16,7 +16,12 @@ const browser = await chromium.launch({
 const context = await browser.newContext();
 const page = await context.newPage();
 const errors = [];
+const verificationRequests = [];
 page.on("pageerror", (e) => errors.push(e.message));
+page.on("request", (request) => {
+  if (new URL(request.url()).pathname === "/api/auth/passkey/verify-authentication")
+    verificationRequests.push(request.headers()["x-fathom-session-duration"]);
+});
 page.on("dialog", (dialog) => dialog.accept());
 const cdp = await context.newCDPSession(page);
 await cdp.send("WebAuthn.enable");
@@ -50,6 +55,15 @@ try {
     await panel.locator(".account-provider-note").textContent(),
     /website owner needs to enable social sign-in/,
   );
+  assert.equal(
+    await panel
+      .getByRole("heading")
+      .evaluateAll((headings) =>
+        headings.every((heading) => heading.classList.contains("sr-only")),
+      ),
+    true,
+  );
+  assert.equal(await panel.getByRole("combobox").count(), 0);
   await panel.getByRole("button", { name: "New here? Create an account", exact: true }).click();
   await panel
     .getByLabel("Email address", { exact: true })
@@ -81,7 +95,7 @@ try {
     .getByRole("button", { name: "Already have an account? Sign in", exact: true })
     .click();
   await panel.getByRole("button", { name: "Sign in with a passkey", exact: true }).waitFor();
-  await panel.getByRole("combobox").selectOption("1h");
+  assert.equal(await panel.getByRole("combobox").count(), 0);
   await panel.getByRole("button", { name: "Sign in with a passkey", exact: true }).click();
   await panel.getByRole("button", { name: "Sign out", exact: true }).waitFor();
   const session = await context.request
@@ -97,14 +111,15 @@ try {
   assert.equal(accountData.complete, false);
   assert.ok(!("token" in accountData.account));
   assert.ok(
-    remaining > 3_570_000 && remaining <= 3_600_000,
-    "Passkey sign-in uses the selected one-hour session duration",
+    remaining > 86_370_000 && remaining <= 86_400_000,
+    "Passkey sign-in uses the default one-day session duration",
   );
+  assert.deepEqual(verificationRequests, ["1d"]);
   await security.getByRole("button", { name: "Remove passkey", exact: true }).click();
   await security.getByText("No passkeys saved to this account.", { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS real UI native virtual-authenticator enrollment, list, rename, sign out, passkey sign-in, selected duration and remove; compact unavailable-provider note.",
+    "PASS real UI native virtual-authenticator enrollment, list, rename, sign out, passkey sign-in, default one-day duration and remove; compact unavailable-provider note.",
   );
 } finally {
   await browser.close();

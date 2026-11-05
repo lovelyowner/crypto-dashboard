@@ -19,6 +19,7 @@ import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAuthConfigRouteImport } from './routes/api/auth/config'
 import { Route as ApiInboxIdRouteImport } from './routes/api/inbox/$id'
 import { Route as ApiModerationAccessRouteImport } from './routes/api/moderation/access'
 import { Route as ApiModerationReportsRouteImport } from './routes/api/moderation/reports'
@@ -84,6 +85,11 @@ const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthConfigRoute = ApiAuthConfigRouteImport.update({
+  id: '/api/auth/config',
+  path: '/api/auth/config',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiInboxIdRoute = ApiInboxIdRouteImport.update({
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/u/$handle': typeof UHandleRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/config': typeof ApiAuthConfigRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
   '/api/moderation/access': typeof ApiModerationAccessRoute
   '/api/moderation/reports': typeof ApiModerationReportsRouteWithChildren
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/u/$handle': typeof UHandleRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/config': typeof ApiAuthConfigRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
   '/api/moderation/access': typeof ApiModerationAccessRoute
   '/api/moderation/reports': typeof ApiModerationReportsRouteWithChildren
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   '/u/$handle': typeof UHandleRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/config': typeof ApiAuthConfigRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
   '/api/moderation/access': typeof ApiModerationAccessRoute
   '/api/moderation/reports': typeof ApiModerationReportsRouteWithChildren
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/u/$handle'
     | '/api/account/export'
     | '/api/auth/$'
+    | '/api/auth/config'
     | '/api/inbox/$id'
     | '/api/moderation/access'
     | '/api/moderation/reports'
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/u/$handle'
     | '/api/account/export'
     | '/api/auth/$'
+    | '/api/auth/config'
     | '/api/inbox/$id'
     | '/api/moderation/access'
     | '/api/moderation/reports'
@@ -324,6 +335,7 @@ export interface FileRouteTypes {
     | '/u/$handle'
     | '/api/account/export'
     | '/api/auth/$'
+    | '/api/auth/config'
     | '/api/inbox/$id'
     | '/api/moderation/access'
     | '/api/moderation/reports'
@@ -353,6 +365,7 @@ export interface RootRouteChildren {
   UHandleRoute: typeof UHandleRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiAuthConfigRoute: typeof ApiAuthConfigRoute
   ApiModerationAccessRoute: typeof ApiModerationAccessRoute
   ApiModerationReportsRoute: typeof ApiModerationReportsRouteWithChildren
   ApiPublicProfilesHandleRoute: typeof ApiPublicProfilesHandleRoute
@@ -430,6 +443,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/config': {
+      id: '/api/auth/config'
+      path: '/api/auth/config'
+      fullPath: '/api/auth/config'
+      preLoaderRoute: typeof ApiAuthConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/inbox/$id': {
@@ -640,6 +660,7 @@ const rootRouteChildren: RootRouteChildren = {
   UHandleRoute: UHandleRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiAuthConfigRoute: ApiAuthConfigRoute,
   ApiModerationAccessRoute: ApiModerationAccessRoute,
   ApiModerationReportsRoute: ApiModerationReportsRouteWithChildren,
   ApiPublicProfilesHandleRoute: ApiPublicProfilesHandleRoute,

@@ -15,18 +15,9 @@ import {
 } from "./policy";
 import { sessionDurationPlugin } from "./session-duration";
 import { resolveDeploymentConfiguration } from "../deployment-config";
-import {
-  configuredSocialProviders,
-  socialProviderAvailability,
-  socialSignInOrigin,
-} from "./social-providers.server";
-import { readAccountSetup } from "./setup";
-import {
-  accountPasskeys,
-  accountTwoFactor,
-  passkeyConfiguration,
-  passkeyPolicyPlugin,
-} from "./passkeys.server";
+import { configuredSocialProviders } from "./social-providers.server";
+import { readPublicAuthConfiguration } from "./public-settings.server";
+import { accountPasskeys, accountTwoFactor, passkeyPolicyPlugin } from "./passkeys.server";
 
 const env = (name: string) => process.env[name]?.trim() || undefined;
 const deployment = resolveDeploymentConfiguration(process.env, import.meta.env?.PROD === true);
@@ -54,20 +45,10 @@ const secret =
   configuredSecret ?? (production ? randomBytes(32).toString("hex") : developmentSecret());
 
 const socialProviders = configuredSocialProviders(process.env);
-const signInOrigin = socialSignInOrigin(authOrigin, passkeyOrigin, production, socialProviders);
 const emailConfigured = Boolean(env("RESEND_API_KEY") && env("AUTH_EMAIL_FROM"));
 
 export function publicAuthConfiguration() {
-  return {
-    configured: authConfigured,
-    emailRecovery: authConfigured && emailConfigured,
-    passkeys: authConfigured && passkeyConfiguration(passkeyOrigin).enabled,
-    passkeyOrigin,
-    providers: socialProviderAvailability(socialProviders, authConfigured),
-    production,
-    setup: readAccountSetup(process.env, production),
-    ...(signInOrigin ? { signInOrigin } : {}),
-  };
+  return readPublicAuthConfiguration(process.env, import.meta.env?.PROD === true);
 }
 
 async function sendEmail(to: string, subject: string, url: string) {
