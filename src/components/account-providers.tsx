@@ -3,19 +3,44 @@ import { SOCIAL_PROVIDERS, type SupportedSocialProviderId } from "@/lib/auth/pro
 
 type Props = {
   configuration: { configured: boolean; providers: Record<string, boolean> } | null;
+  availability: "loading" | "ready" | "unavailable";
   accounts: readonly { providerId: string }[];
   linking: boolean;
   busy: boolean;
   onConnect: (provider: SupportedSocialProviderId, linking: boolean) => void;
 };
 
-export function AccountProviders({ configuration, accounts, linking, busy, onConnect }: Props) {
-  const enabled = SOCIAL_PROVIDERS.filter(
+export function AccountProviders({
+  configuration,
+  availability,
+  accounts,
+  linking,
+  busy,
+  onConnect,
+}: Props) {
+  const supported = SOCIAL_PROVIDERS.filter((provider) => provider.supported);
+  const enabled = supported.filter(
     (provider) =>
       provider.supported &&
       configuration?.configured === true &&
       configuration.providers[provider.providerId] === true,
   );
+
+  if (availability !== "ready")
+    return (
+      <section
+        className="account-provider-options"
+        aria-label={linking ? "Connect sign-in services" : "Social sign-in options"}
+      >
+        {availability === "loading" ? (
+          <p className="account-provider-note" role="status">
+            Checking sign-in services…
+          </p>
+        ) : (
+          <p className="account-provider-note">Social sign-in is temporarily unavailable.</p>
+        )}
+      </section>
+    );
 
   return (
     <section
@@ -53,14 +78,12 @@ export function AccountProviders({ configuration, accounts, linking, busy, onCon
         })}
       </div>
       {!enabled.length && (
-        <p className="account-provider-note">
-          Social sign-in needs server setup. Email and passkeys use the account service.
-        </p>
+        <p className="account-provider-note">Social sign-in is not enabled on this website.</p>
       )}
       <details className="account-service-details">
         <summary>Sign-in services</summary>
         <ul className="account-service-statuses">
-          {SOCIAL_PROVIDERS.map((provider) => {
+          {supported.map((provider) => {
             const ready =
               provider.supported &&
               configuration?.configured === true &&
@@ -68,16 +91,7 @@ export function AccountProviders({ configuration, accounts, linking, busy, onCon
             return (
               <li key={provider.providerId}>
                 <span className="account-service-name">{provider.label}</span>
-                <span>
-                  {!configuration
-                    ? "Checking availability…"
-                    : ready
-                      ? "Available"
-                      : provider.supported
-                        ? "Server setup required"
-                        : "Integration needed"}
-                </span>
-                {"requirement" in provider && <small>{provider.requirement}</small>}
+                <span>{ready ? "Available" : "Not enabled"}</span>
               </li>
             );
           })}

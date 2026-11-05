@@ -12,7 +12,8 @@
 | Inactive login buttons | Only configured, implemented providers remain actionable; unavailable providers use compact status text. |
 | Repeated promotional copy | Simplified address/activity empty states and wallet instructions; removed duplicate sidebar and network promotional cards. |
 | Sidebar cleanup and action layout | Removed the Fathom brand block, curved active-navigation marker, and Workspace tools heading/divider. Kept accessible navigation and compact contextual wallet/address actions. |
-| Social sign-in choices | Google, Discord, Twitter/X, GitHub, and Twitch adapters, with configured buttons for sign-in and linking. A collapsed service list explains setup and the five requested integrations that are not implemented. Registered provider credentials are required for live use. |
+| Social sign-in choices | Google, Discord, Twitter/X, GitHub, and Twitch adapters, with configured buttons for sign-in and linking. A collapsed service list shows only supported services; planned integrations stay in development proposals. Registered provider credentials are required for live use. |
+| Sign-in availability recovery | One loading indicator, an eight-second request/body deadline, validated public configuration, and an explicit retry after errors. Failed or incomplete responses never enable sign-in controls. |
 
 The development changes also include the exact white/gray palette, simpler headers, inbox search/unread filters, conversation drafts, copying, and an offline sample inbox preview. Search covers loaded messages and latest replies. Development uses the `preview` branch; production stays on `main`. Check Vercel for deployment readiness as described in the [preview workflow](preview-workflow.md).
 
@@ -32,7 +33,7 @@ The development changes also include the exact white/gray palette, simpler heade
 
 ## Deployment proposal
 
-Register the five supported OAuth applications on the stable preview origin and test sign-in, sign-up, linking, unlinking, and recovery there. Provider credentials stay server-side. A provider shown as **Integration needed** is a development proposal, not a working login method.
+Start by registering Google and Discord on the stable preview origin, then add GitHub, Twitch, or Twitter/X if users need them. Test sign-in, sign-up, linking, unlinking, and recovery. Provider credentials stay server-side. Bluesky, Fluxer, Stoat, hey.xyz, and Mastodon remain development proposals; remove their placeholder rows from normal login and implement verified identity adapters before offering buttons.
 
 Expose the preview build ID and Vercel-provided branch domain in a small preview-only status menu, so reviewers can open the newest UI without hunting through deployment URLs. Keep it out of the production interface.
 

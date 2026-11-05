@@ -46,7 +46,10 @@ try {
     await panel.locator(".account-provider").count(),
     Object.values(configuration.providers).filter(Boolean).length,
   );
-  assert.match(await panel.locator(".account-provider-note").textContent(), /not integrated/);
+  assert.match(
+    await panel.locator(".account-provider-note").textContent(),
+    /Social sign-in is not enabled/,
+  );
   await panel.getByRole("button", { name: "New here? Create an account", exact: true }).click();
   await panel
     .getByLabel("Email address", { exact: true })

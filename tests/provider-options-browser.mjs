@@ -35,6 +35,13 @@ let configuration = {
   production: false,
   passkeys: false,
 };
+let configurationMode = "pending";
+const pendingConfigurations = new Map();
+async function releaseConfiguration(value) {
+  const pending = [...pendingConfigurations.entries()];
+  for (const [resolve] of pending) resolve(value);
+  await Promise.all(pending.map(([, completed]) => completed));
+}
 let session = null;
 let accounts = [];
 const now = new Date().toISOString();
@@ -75,7 +82,38 @@ await context.route("**/*", async (route) => {
   }
   if (!url.pathname.startsWith("/api/auth/")) return route.continue();
   const path = url.pathname.slice("/api/auth/".length);
-  if (path === "config") return json(route, configuration);
+  if (path === "config") {
+    if (configurationMode === "http-error") return json(route, { message: "Fixture failure" }, 500);
+    if (configurationMode === "invalid-json")
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{not-json" });
+    if (configurationMode === "invalid-schema")
+      return json(route, {
+        ...configuration,
+        configured: true,
+        providers: { ...allProviders, twitter: "true" },
+      });
+    if (configurationMode === "pending") {
+      let release;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      let complete;
+      const completed = new Promise((resolve) => {
+        complete = resolve;
+      });
+      pendingConfigurations.set(release, completed);
+      try {
+        const value = await gate;
+        // An intentionally timed-out fetch may already have been cancelled by the application.
+        await json(route, value).catch(() => undefined);
+      } finally {
+        pendingConfigurations.delete(release);
+        complete();
+      }
+      return;
+    }
+    return json(route, configuration);
+  }
   if (path === "get-session") return json(route, session);
   if (path === "list-accounts") return json(route, accounts);
   if (path === "list-sessions") return json(route, session ? [session.session] : []);
@@ -98,11 +136,26 @@ async function check(name, run) {
   checks += 1;
   console.log(`PASS ${name}`);
 }
-async function openLogin(path = "/login") {
-  await page.goto(new URL(path, origin).href, { waitUntil: "networkidle" });
-  await page.locator(".account-panel").waitFor();
+async function readyConfiguration() {
   await page.getByText("Sign-in services", { exact: true }).waitFor();
 }
+async function openLogin(path = "/login", waitForReady = true) {
+  await page.goto(new URL(path, origin).href, { waitUntil: "domcontentloaded" });
+  await page.locator(".account-panel").waitFor();
+  if (waitForReady) await readyConfiguration();
+}
+async function assertNoProviderActions() {
+  assert.equal(await page.locator(".account-provider").count(), 0);
+  assert.equal(await page.getByText("Checking availability…", { exact: true }).count(), 0);
+  for (const name of unsupported)
+    assert.equal(await page.getByText(name, { exact: true }).count(), 0);
+}
+const loadingOptions = () =>
+  page.getByRole("status").filter({ hasText: /^Checking sign-in services…$/ });
+const failedOptions = () =>
+  page
+    .getByRole("alert")
+    .filter({ hasText: /^Sign-in options could not be loaded\. Try again\.$/ });
 function callbackPath(request) {
   const callback = new URL(request.body.callbackURL, origin);
   assert.equal(callback.origin, origin, "Provider callbacks remain on this application origin");
@@ -125,33 +178,40 @@ async function initiate(providerId, label, linking = false) {
   return providerRequests.at(-1);
 }
 try {
-  await openLogin();
+  await openLogin("/login", false);
+  await loadingOptions().waitFor();
+  await check(
+    "a pending availability check has one status and no stale or planned provider actions",
+    async () => {
+      assert.equal(await loadingOptions().count(), 1);
+      await assertNoProviderActions();
+      assert.equal(await page.locator(".account-service-statuses li").count(), 0);
+    },
+  );
+  configurationMode = "ready";
+  await releaseConfiguration(configuration);
+  await readyConfiguration();
   await check(
     "unconfigured account service shows setup guidance instead of inert provider buttons",
     async () => {
       assert.equal(await page.locator(".account-provider").count(), 0);
       await page
         .locator(".account-provider-note")
-        .filter({ hasText: "Social sign-in needs server setup" })
+        .filter({ hasText: "Social sign-in is not enabled on this website." })
         .waitFor();
       assert.equal(await page.locator(".account-service-details").getAttribute("open"), null);
       await page.getByText("Sign-in services", { exact: true }).click();
-      assert.equal(await page.locator(".account-service-statuses li").count(), 10);
+      assert.equal(await page.locator(".account-service-statuses li").count(), 5);
       assert.equal(await page.locator(".account-service-statuses button").count(), 0);
       assert.equal(
         await page
           .locator(".account-service-statuses")
-          .getByText("Server setup required", { exact: true })
+          .getByText("Not enabled", { exact: true })
           .count(),
         5,
       );
-      assert.equal(
-        await page
-          .locator(".account-service-statuses")
-          .getByText("Integration needed", { exact: true })
-          .count(),
-        5,
-      );
+      await assertNoProviderActions();
+      assert.equal(await loadingOptions().count(), 0);
     },
   );
 
@@ -161,9 +221,9 @@ try {
     providers: {
       google: true,
       discord: false,
-      twitter: "true",
+      twitter: false,
       github: true,
-      twitch: 1,
+      twitch: false,
       bluesky: true,
       mastodon: true,
     },
@@ -187,16 +247,69 @@ try {
           .count(),
         2,
       );
-      for (const label of unsupported) {
-        const row = page
-          .locator(".account-service-statuses li")
-          .filter({ has: page.locator(".account-service-name", { hasText: label }) });
-        assert.match(await row.innerText(), /Integration needed/);
-      }
+      assert.equal(await page.locator(".account-service-statuses li").count(), 5);
+      for (const label of unsupported)
+        assert.equal(await page.getByText(label, { exact: true }).count(), 0);
     },
   );
 
+  for (const [mode, description] of [
+    ["http-error", "HTTP failures"],
+    ["invalid-json", "malformed JSON"],
+    ["invalid-schema", "malformed availability flags"],
+  ]) {
+    configurationMode = mode;
+    await openLogin("/login", false);
+    await failedOptions().waitFor();
+    await check(`${description} end loading and offer retry without provider actions`, async () => {
+      assert.equal(await failedOptions().count(), 1);
+      assert.equal(await loadingOptions().count(), 0);
+      await assertNoProviderActions();
+      assert.equal(
+        await page.getByRole("button", { name: "Retry sign-in options", exact: true }).isEnabled(),
+        true,
+      );
+    });
+  }
+
   configuration = { ...configuration, providers: allProviders };
+  configurationMode = "pending";
+  await page.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
+  await loadingOptions().waitFor();
+  await check(
+    "retry clears failure and keeps actions unavailable until a valid response arrives",
+    async () => {
+      assert.equal(await failedOptions().count(), 0);
+      assert.equal(await loadingOptions().count(), 1);
+      await assertNoProviderActions();
+      configurationMode = "ready";
+      await releaseConfiguration(configuration);
+      await readyConfiguration();
+      assert.equal(await page.locator(".account-provider").count(), 5);
+      assert.equal(await loadingOptions().count(), 0);
+      assert.equal(await failedOptions().count(), 0);
+    },
+  );
+
+  configurationMode = "pending";
+  await openLogin("/login", false);
+  await loadingOptions().waitFor();
+  await failedOptions().waitFor({ timeout: 12_000 });
+  await check(
+    "a hanging availability fetch times out and its late response cannot enable stale actions",
+    async () => {
+      assert.equal(await loadingOptions().count(), 0);
+      await assertNoProviderActions();
+      await releaseConfiguration(configuration);
+      assert.equal(await failedOptions().count(), 1);
+      assert.equal(await page.locator(".account-provider").count(), 0);
+      configurationMode = "ready";
+      await page.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
+      await readyConfiguration();
+      assert.equal(await page.locator(".account-provider").count(), 5);
+    },
+  );
+
   await openLogin("/login?next=%2Fprovider-fixture");
   await page.locator(".account-panel").getByRole("combobox").selectOption("7d");
   await check(
@@ -364,6 +477,7 @@ try {
     `Provider options browser: ${checks} checks passed (mocked auth availability and SDK requests; no live OAuth claimed).`,
   );
 } finally {
+  await releaseConfiguration(configuration);
   await context.close();
   await browser.close();
 }

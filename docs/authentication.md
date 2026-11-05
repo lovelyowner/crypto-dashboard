@@ -83,8 +83,19 @@ For verification and password reset email, set `RESEND_API_KEY` and `AUTH_EMAIL_
 
 Rate limits use the shared PostgreSQL `rateLimit` table, including atomic increments and unique endpoint/IP counters, so a new serverless instance cannot reset the limit. Login allows ten attempts per minute per IP and endpoint; signup allows five, and password-reset/verification emails allow three. Account-level authenticator lockout also persists in the database. Deploy migration `0004_auth_rate_limit.sql` before enabling authentication. IP headers must come from the hosting platform's trusted proxy; direct self-hosting must overwrite untrusted forwarded headers. Database backups, configured email delivery, HTTPS, and provider-specific end-to-end verification remain deployment requirements.
 
+## Troubleshooting account availability
+
+Open `/api/auth/config` on the same deployment as the login page. It should return HTTP 200 with JSON containing `configured`, `emailRecovery`, `passkeys`, `passkeyOrigin`, `production`, and provider flags for `google`, `discord`, `twitter`, `github`, and `twitch`. This public endpoint returns availability flags and the public passkey origin; it never returns credentials or session tokens. It does not connect to the database or contact OAuth providers.
+
+- **`configured: false`:** account setup is incomplete. On Vercel Preview, set the complete `PREVIEW_DATABASE_URL`, `PREVIEW_BETTER_AUTH_SECRET`, and `PREVIEW_BETTER_AUTH_URL` trio in Preview settings. The secret needs at least 32 characters; the URL must be the exact public HTTPS origin. Generic production credentials are intentionally ignored there. Configuration discovery still returns 200; account operations return 503 until setup is complete.
+- **`configured: true`, provider flag `false`:** add that provider's complete client ID/secret pair from the table above. The five implemented adapters each require their own registered application. Register the exact deployment origin plus its `/api/auth/callback/<provider>` path, including the correct preview hostname. A `true` flag confirms configuration is present; test the real provider flow to verify credentials, consent, and callback registration.
+- **HTML, a redirect, or HTTP 404:** inspect the deployed `/api/[...path]` function and API routing, deployment protection, and the requested hostname. The browser-only downloadable build has no account server. A static page response cannot supply account configuration.
+- **HTTP 500/503 or a pending request:** inspect the Vercel function logs and browser Network panel for startup errors, platform responses, or failed requests. Missing preview/provider settings alone should produce the 200 JSON configuration response above. Retry availability after resolving the request failure.
+
+After changing Preview variables or callback registration, redeploy the preview and check its configuration endpoint again. Keep production variables and production provider registrations unchanged. Configure secrets only in server-side deployment settings.
+
 ## Integrations requiring further work
 
-Fluxer and Stoat adapters are not implemented in this application. Bluesky uses AT Protocol OAuth and needs a dedicated adapter. Mastodon needs an instance-aware flow and a separate verified-email strategy because its normal account API does not provide email. Hey/Lens needs a wallet-identity integration. These services appear in capability notes; configured supported adapters get sign-in buttons. Provider profile links remain separate from account authentication.
+Bluesky, Fluxer, Stoat, Hey/Lens, and Mastodon integrations are tracked in the [development proposals](proposals.md#add-next). The login interface lists only the five implemented adapters. Provider profile links remain separate from account authentication.
 
 Yoti identity verification and service-held wallet keys are not enabled. Identity verification does not itself store or recover crypto keys. A custodial product requires a separately designed and reviewed key-management service. The application never sends locally generated wallet recovery phrases to its account service.

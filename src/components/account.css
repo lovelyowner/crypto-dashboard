@@ -224,12 +224,6 @@
 .account-service-name {
   color: #333;
 }
-.account-service-statuses small {
-  grid-column: 1 / -1;
-  color: #666;
-  font-size: 11px;
-  line-height: 1.6;
-}
 .account-provider-connected {
   display: flex;
   align-items: center;

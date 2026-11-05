@@ -28,16 +28,9 @@ import {
 } from "@/lib/auth/passkeys-browser";
 import { AccountProviders } from "./account-providers";
 import { socialProviderLabel, type SupportedSocialProviderId } from "@/lib/auth/providers";
+import { useAuthConfiguration } from "@/lib/auth/use-configuration";
 import "./account.css";
 
-type Configuration = {
-  configured: boolean;
-  emailRecovery: boolean;
-  providers: Record<string, boolean>;
-  production: boolean;
-  passkeys?: boolean;
-  passkeyOrigin?: string;
-};
 type LinkedAccount = { id: string; providerId: string; accountId: string };
 type Setup = { totpURI: string; backupCodes: string[] };
 
@@ -64,8 +57,12 @@ async function request<T>(
 
 export function AccountPanel({ onClose }: { onClose: () => void }) {
   const { data: session, isPending, refetch } = authClient.useSession();
-  const [configuration, setConfiguration] = useState<Configuration | null>(null);
-  const [configurationError, setConfigurationError] = useState("");
+  const {
+    configuration,
+    status: configurationStatus,
+    error: configurationError,
+    retry: reloadConfiguration,
+  } = useAuthConfiguration();
   const [mode, setMode] = useState<"login" | "signup" | "recover" | "reset">("login");
   const [identifierKind, setIdentifierKind] = useState<"email" | "username">("email");
   const [identifier, setIdentifier] = useState("");
@@ -102,17 +99,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   }, [configuration?.passkeyOrigin, user?.id]);
 
   useEffect(() => {
-    let active = true;
-    request<Configuration>("config")
-      .then((value) => {
-        if (active) setConfiguration(value);
-      })
-      .catch(() => {
-        if (active)
-          setConfigurationError(
-            "Account service unavailable. Watching addresses and local wallets still work.",
-          );
-      });
     const params = new URLSearchParams(window.location.search);
     setReturnTo(safeAccountReturnPath(params.get("next")));
     const token = params.get("token");
@@ -120,9 +106,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       setResetToken(token);
       setMode("reset");
     }
-    return () => {
-      active = false;
-    };
   }, []);
 
   useEffect(() => {
@@ -251,6 +234,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const providerButtons = (linking: boolean) => (
     <AccountProviders
       configuration={configuration}
+      availability={configurationStatus}
       accounts={accounts}
       linking={linking}
       busy={busy}
@@ -289,10 +273,22 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           {error || configurationError}
         </p>
       )}
+      {configurationStatus === "unavailable" && (
+        <button
+          className="account-secondary"
+          type="button"
+          onClick={() => {
+            setError("");
+            reloadConfiguration();
+          }}
+        >
+          Retry sign-in options
+        </button>
+      )}
       {configuration && !configuration.configured && (
         <p className="account-message account-error" role="alert">
-          The account service needs a database, signing secret, and HTTPS origin for this
-          deployment. Preview deployments use separate preview settings.
+          Accounts are not enabled on this website yet. Public tracking and local wallets still
+          work.
         </p>
       )}
       {notice && (

@@ -226,7 +226,7 @@ async function runChecks() {
     await check("hosted account panel clearly requires setup and disables sign-in", async () => {
       await dialog
         .getByRole("alert")
-        .filter({ hasText: /database, signing secret, and HTTPS origin for this/ })
+        .filter({ hasText: /Accounts are not enabled on this website yet/ })
         .waitFor();
       assert.equal(
         await dialog.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
@@ -238,12 +238,11 @@ async function runChecks() {
       async () => {
         assert.equal(await dialog.locator(".account-provider").count(), 0);
         const note = await dialog.locator(".account-provider-note").textContent();
-        assert.match(note, /Social sign-in needs server setup/);
+        assert.match(note, /Social sign-in is not enabled/);
         await dialog.getByText("Sign-in services", { exact: true }).click();
         const services = dialog.locator(".account-service-statuses");
-        assert.equal(await services.locator("li").count(), 10);
-        assert.equal(await services.getByText("Server setup required", { exact: true }).count(), 5);
-        assert.equal(await services.getByText("Integration needed", { exact: true }).count(), 5);
+        assert.equal(await services.locator("li").count(), 5);
+        assert.equal(await services.getByText("Not enabled", { exact: true }).count(), 5);
         assert.equal(
           await dialog.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),
           0,
