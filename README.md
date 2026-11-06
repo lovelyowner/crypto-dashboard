@@ -2,7 +2,7 @@
 
 A multi-chain, browser-first crypto address dashboard, rebuilt from the supplied Grok application. Watch public addresses without signing in; create passphrase-encrypted wallets locally. Account authentication runs on a small same-origin server. No Grok services or shared broker credentials are required.
 
-See [development proposals](docs/proposals.md) for prioritized additions and simplifications. The latest development batch adds a preview build/link menu, explicit account setup diagnostics, OAuth callback 2FA/recovery, unified refresh/import controls, token-owner reattachment, inbox keyboard focus, and a bounded [account/profile export](docs/account-data.md).
+See [development proposals](docs/proposals.md) for prioritized additions and simplifications. The latest development batch adds bounded [conversation downloads](docs/account-data.md) with explicit completeness and simplifies connected-account controls. Earlier updates include preview links, sign-in diagnostics, OAuth callback 2FA, unified refresh/import controls, and token-owner recovery.
 
 Ongoing updates use the `preview` branch, with production kept on `main`. See the [preview workflow](docs/preview-workflow.md) for the reusable Vercel link, separate preview account configuration, and efficient UI review.
 
@@ -83,6 +83,7 @@ Install the browser for UI tests with `npx playwright install chromium`. Browser
 - Native balance/activity adapters for Bitcoin, Ethereum and EVM networks, Solana, Cosmos Hub, Osmosis, Celestia, NEAR, and XRP. Polkadot and Kusama expose finalized native free balances; history requires an indexer. Some EVM networks provide balance only.
 - Browser-generated 24-word BIP39 wallets, offline backup acknowledgment and word challenge, BTC/ETH/SOL/Cosmos/XRP/NEAR public addresses, passphrase-only AES-GCM encryption using PBKDF2-SHA256 (600,000 iterations), encrypted backup import/export, and password-gated recovery reveal. Generating NEAR/XRP addresses does not fund or activate their accounts.
 - One Email or username password-login field, passkey login, authenticator enrollment with verification, single-use recovery codes, server-enforced session limits, account linking, and direct Google/Discord/Twitter adapters when configured.
+- Fresh-session account/profile and conversation JSON downloads with owner-scoped reads, explicit limits, anonymous-message privacy, and no changes to inbox read state. See [export scopes](docs/account-data.md).
 - Exact read-only [ERC20/SPL token balances](docs/token-balances.md) for explicitly selected public owners and contracts/mints, separate from native USD totals. Public token-watch JSON backups preview validated merges, skip duplicates and unmatched owners, and contain no wallet keys or account data.
 - Inbox block/report controls, prospective contact/payment-quote guards, private report snapshots, and a server-authorized moderation review queue. See [Messages and payments](docs/messages-and-payments.md).
 - Responsive desktop/mobile layout and keyboard-accessible dialogs.

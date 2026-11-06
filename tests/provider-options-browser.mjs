@@ -255,6 +255,23 @@ async function check(name, run) {
 async function readyConfiguration() {
   await page.locator(".account-provider-options[data-availability='ready']").waitFor();
 }
+async function assertConnectedProvider(label) {
+  const status = `${label} connected`;
+  await page.getByText(status, { exact: true }).waitFor();
+  assert.equal(await page.getByText(status, { exact: true }).count(), 1);
+  const row = page.locator(".account-linked").filter({ hasText: status });
+  assert.equal(await row.count(), 1);
+  assert.equal(await row.getByRole("button", { name: "Disconnect", exact: true }).count(), 1);
+  assert.equal(
+    await page.locator(".account-providers").getByText(status, { exact: true }).count(),
+    0,
+    "Connected identities appear once, alongside their disconnect control",
+  );
+  assert.equal(
+    await page.getByRole("button", { name: `Connect ${label}`, exact: true }).count(),
+    0,
+  );
+}
 async function openLogin(path = "/login", waitForReady = true) {
   // A client settings request starts after hydration; SSR text alone is not an interaction gate.
   const settingsRequested = page.waitForRequest(
@@ -960,11 +977,7 @@ try {
   await check(
     "signed-in Connect actions link accounts while preserving independent recovery",
     async () => {
-      await page.getByText("GitHub connected", { exact: true }).waitFor();
-      assert.equal(
-        await page.getByRole("button", { name: "Connect GitHub", exact: true }).count(),
-        0,
-      );
+      await assertConnectedProvider("GitHub");
       await page.getByRole("heading", { name: "Change password", exact: true }).waitFor();
       const request = await initiate("google", "Google", true);
       assert.equal(request.path, "link-social");
@@ -976,11 +989,7 @@ try {
     async () => {
       configuration = { ...configuration, providers: { ...allProviders, github: false } };
       await openLogin();
-      await page.getByText("GitHub connected", { exact: true }).waitFor();
-      assert.equal(
-        await page.getByRole("button", { name: "Connect GitHub", exact: true }).count(),
-        0,
-      );
+      await assertConnectedProvider("GitHub");
     },
   );
   await page
@@ -1010,7 +1019,7 @@ try {
   await check(
     "the last sign-in method cannot be removed and password recovery remains discoverable",
     async () => {
-      await page.getByText("Twitch connected", { exact: true }).waitFor();
+      await assertConnectedProvider("Twitch");
       assert.equal(
         await page
           .locator(".account-linked")

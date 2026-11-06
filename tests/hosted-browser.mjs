@@ -176,6 +176,9 @@ async function runChecks() {
         assert.deepEqual(await metadata.json(), { preview: false });
         assert.match(metadata.headers.get("cache-control"), /no-store/);
         assert.equal((await fetch(`${baseURL}/api/account/export`)).status, 503);
+        const conversations = await fetch(`${baseURL}/api/account/messages-export`);
+        assert.equal(conversations.status, 503);
+        assert.match(conversations.headers.get("cache-control"), /no-store/);
         assert.match(response.headers.get("cache-control"), /no-store/);
         assert.deepEqual(await response.json(), {
           configured: false,

@@ -168,12 +168,6 @@
 .account-signin-options {
   margin-top: 24px;
 }
-.account-provider-note {
-  color: #999;
-  font-size: 11px;
-  line-height: 1.6;
-  margin: 12px 0;
-}
 .account-service-details {
   margin: 14px 0 0;
   color: #666;
@@ -203,14 +197,6 @@
 }
 .account-service-name {
   color: #333;
-}
-.account-provider-connected {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #666;
-  padding: 8px 0;
-  font-size: 12px;
 }
 .account-passkey-signin {
   width: 100%;

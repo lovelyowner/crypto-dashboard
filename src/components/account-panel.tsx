@@ -983,16 +983,14 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             twoFactorEnabled={twoFactorEnabled}
           />
           <p className="account-help">
-            Connect another provider and keep an email/password login. A suspended Discord account
-            won’t then be your only route back. Linking requires proving ownership through that
-            provider and a verified local email.
+            Linking requires a verified email and authorization from the provider.
           </p>
           {providerButtons(true)}
           {accounts
             .filter((account) => account.providerId !== "credential")
             .map((account) => (
               <div className="account-linked" key={account.id}>
-                <span>{socialProviderLabel(account.providerId)}</span>
+                <span>{socialProviderLabel(account.providerId)} connected</span>
                 <button
                   type="button"
                   className="account-text-button"

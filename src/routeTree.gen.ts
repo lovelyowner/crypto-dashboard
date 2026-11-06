@@ -18,6 +18,7 @@ import { Route as ApiPaymentsRouteImport } from './routes/api/payments'
 import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
+import { Route as ApiAccountMessagesExportRouteImport } from './routes/api/account.messages-export'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAuthConfigRouteImport } from './routes/api/auth/config'
 import { Route as ApiInboxIdRouteImport } from './routes/api/inbox/$id'
@@ -82,6 +83,12 @@ const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
   path: '/api/account/export',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAccountMessagesExportRoute =
+  ApiAccountMessagesExportRouteImport.update({
+    id: '/api/account/messages-export',
+    path: '/api/account/messages-export',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -186,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
   '/api/account/export': typeof ApiAccountExportRoute
+  '/api/account/messages-export': typeof ApiAccountMessagesExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/auth/config': typeof ApiAuthConfigRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
@@ -215,6 +223,7 @@ export interface FileRoutesByTo {
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
   '/api/account/export': typeof ApiAccountExportRoute
+  '/api/account/messages-export': typeof ApiAccountMessagesExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/auth/config': typeof ApiAuthConfigRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
@@ -245,6 +254,7 @@ export interface FileRoutesById {
   '/api/profile': typeof ApiProfileRouteWithChildren
   '/u/$handle': typeof UHandleRoute
   '/api/account/export': typeof ApiAccountExportRoute
+  '/api/account/messages-export': typeof ApiAccountMessagesExportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/auth/config': typeof ApiAuthConfigRoute
   '/api/inbox/$id': typeof ApiInboxIdRouteWithChildren
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/api/profile'
     | '/u/$handle'
     | '/api/account/export'
+    | '/api/account/messages-export'
     | '/api/auth/$'
     | '/api/auth/config'
     | '/api/inbox/$id'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/api/profile'
     | '/u/$handle'
     | '/api/account/export'
+    | '/api/account/messages-export'
     | '/api/auth/$'
     | '/api/auth/config'
     | '/api/inbox/$id'
@@ -334,6 +346,7 @@ export interface FileRouteTypes {
     | '/api/profile'
     | '/u/$handle'
     | '/api/account/export'
+    | '/api/account/messages-export'
     | '/api/auth/$'
     | '/api/auth/config'
     | '/api/inbox/$id'
@@ -364,6 +377,7 @@ export interface RootRouteChildren {
   ApiProfileRoute: typeof ApiProfileRouteWithChildren
   UHandleRoute: typeof UHandleRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
+  ApiAccountMessagesExportRoute: typeof ApiAccountMessagesExportRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAuthConfigRoute: typeof ApiAuthConfigRoute
   ApiModerationAccessRoute: typeof ApiModerationAccessRoute
@@ -436,6 +450,13 @@ declare module '@tanstack/react-router' {
       path: '/api/account/export'
       fullPath: '/api/account/export'
       preLoaderRoute: typeof ApiAccountExportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/account/messages-export': {
+      id: '/api/account/messages-export'
+      path: '/api/account/messages-export'
+      fullPath: '/api/account/messages-export'
+      preLoaderRoute: typeof ApiAccountMessagesExportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -659,6 +680,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProfileRoute: ApiProfileRouteWithChildren,
   UHandleRoute: UHandleRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
+  ApiAccountMessagesExportRoute: ApiAccountMessagesExportRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAuthConfigRoute: ApiAuthConfigRoute,
   ApiModerationAccessRoute: ApiModerationAccessRoute,

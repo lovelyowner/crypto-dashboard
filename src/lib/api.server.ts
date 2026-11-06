@@ -6,6 +6,7 @@ import { handleModerationRequest } from "./moderation.server.js";
 import { handlePublicationRequest, handlePublicProfileRequest } from "./publication.server.js";
 import { handleDeploymentStatusRequest } from "./deployment-status.js";
 import { handleAccountExportRequest } from "./account-export.server.js";
+import { handleConversationExportRequest } from "./conversation-export.server.js";
 
 /** Shared same-origin API for the Node server and Vercel functions. */
 export async function handleApiRequest(request: Request): Promise<Response> {
@@ -13,6 +14,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   let response: Response;
   if (pathname === "/api/deployment") response = handleDeploymentStatusRequest(request);
   else if (pathname === "/api/account/export") response = await handleAccountExportRequest(request);
+  else if (pathname === "/api/account/messages-export")
+    response = await handleConversationExportRequest(request);
   else if (
     pathname === "/api/profile/contact" ||
     pathname === "/api/inbox" ||

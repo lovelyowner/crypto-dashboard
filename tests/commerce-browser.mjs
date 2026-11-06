@@ -153,7 +153,7 @@ try {
   );
   await login.click();
   const panel = memberPage.locator(".account-panel");
-  await panel.locator('input[autocomplete="email"]').fill(sender.email);
+  await panel.getByLabel("Email or username", { exact: true }).fill(sender.email);
   await panel.locator('input[autocomplete="current-password"]').fill(sender.password);
   await panel.getByRole("button", { name: "Sign in", exact: true }).click();
   await memberPage.waitForURL(`${origin}/${handle}`);

@@ -103,7 +103,12 @@ async function childChecks(entryURL, scenario) {
     const deployment = await invoke("/api/deployment");
     assert.equal(deployment.status, 200);
     assert.deepEqual(deployment.json, { preview: scenario !== "production" });
-    for (const path of ["/api/auth/get-session", "/api/profile", "/api/account/export"]) {
+    for (const path of [
+      "/api/auth/get-session",
+      "/api/profile",
+      "/api/account/export",
+      "/api/account/messages-export",
+    ]) {
       const response = await invoke(path);
       assert.equal(response.status, 503, path);
       assert.equal(typeof response.json.message, "string");

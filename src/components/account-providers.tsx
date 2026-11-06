@@ -1,4 +1,3 @@
-import { Check } from "lucide-react";
 import { SOCIAL_PROVIDERS, type SupportedSocialProviderId } from "@/lib/auth/providers";
 
 type Props = {
@@ -36,12 +35,7 @@ export function AccountProviders({
         {SOCIAL_PROVIDERS.map((provider) => {
           if (!provider.supported) return null;
           const connected = accounts.some((account) => account.providerId === provider.providerId);
-          if (linking && connected)
-            return (
-              <span className="account-provider-connected" key={provider.providerId}>
-                <Check size={14} aria-hidden="true" /> {provider.label} connected
-              </span>
-            );
+          if (linking && connected) return null;
           const label = `${linking ? "Connect" : "Continue with"} ${provider.label}`;
           return (
             <button

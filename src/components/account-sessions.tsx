@@ -326,8 +326,8 @@ export function AccountRecoveryReadiness({
       )}
       <p>
         {twoFactorEnabled
-          ? "Authenticator protection is on for password sign-in. Keep its backup codes somewhere private; the app cannot check whether you saved them."
-          : "Authenticator protection is off for password sign-in. You can enable it after setting an account password."}
+          ? "Authenticator protection is on. Keep its backup codes somewhere private; the app cannot check whether you saved them."
+          : "Authenticator protection is off. You can enable it after setting an account password."}
       </p>
     </section>
   );

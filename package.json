@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-isolation=none src/lib/*.test.ts src/lib/wallet/*.test.ts src/lib/auth/*.test.ts scripts/migration-plan.test.mjs",
     "lint": "eslint src vite.config.ts",
-    "test:e2e": "node tests/browser.mjs && node tests/workspace-browser.mjs && node tests/txt-import-browser.mjs && node tests/actions-browser.mjs && node tests/profile-browser.mjs && npm run test:account && npm run test:providers && node tests/session-browser.mjs && node tests/publication-browser.mjs && node tests/wallet-profile-browser.mjs && node tests/commerce-browser.mjs && npm run test:creator-setup && npm run test:inbox-activity && npm run test:tokens && npm run test:token-backups && npm run test:moderation",
+    "test:e2e": "node tests/browser.mjs && node tests/workspace-browser.mjs && node tests/txt-import-browser.mjs && node tests/actions-browser.mjs && node tests/profile-browser.mjs && npm run test:account && npm run test:conversation-export && npm run test:providers && node tests/session-browser.mjs && node tests/publication-browser.mjs && node tests/wallet-profile-browser.mjs && node tests/commerce-browser.mjs && npm run test:creator-setup && npm run test:inbox-activity && npm run test:tokens && npm run test:token-backups && npm run test:moderation",
     "db:migrate": "node scripts/migrate.mjs",
     "test:auth": "node scripts/auth-integration.mjs",
     "build:site": "vite build --config vite.static.config.ts && node scripts/package-site.mjs",
@@ -33,7 +33,8 @@
     "test:tokens": "node tests/token-browser.mjs",
     "test:token-backups": "node tests/token-backup-browser.mjs",
     "test:moderation": "node tests/moderation-browser.mjs",
-    "test:passkeys": "node tests/passkey-browser.mjs"
+    "test:passkeys": "node tests/passkey-browser.mjs",
+    "test:conversation-export": "node tests/conversation-export-browser.mjs"
   },
   "dependencies": {
     "@better-auth/core": "1.6.33",
