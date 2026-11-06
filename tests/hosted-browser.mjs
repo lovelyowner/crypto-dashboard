@@ -312,9 +312,10 @@ async function runChecks() {
           true,
           "Hosted social choices follow the credential form and account switches",
         );
-        assert.equal(await dialog.locator(".account-provider-info").count(), 5);
-        for (const button of await dialog.locator(".account-provider-info").all())
-          assert.equal(await button.isVisible(), false);
+        assert.equal(await dialog.locator(".account-provider-info").count(), 0);
+        assert.equal(await dialog.getByText("More services", { exact: true }).count(), 0);
+        for (const label of ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"])
+          assert.equal(await dialog.getByText(label, { exact: true }).count(), 0);
         await dialog.getByLabel("Email address", { exact: true }).fill("preserved@example.com");
         await dialog.getByLabel("Password", { exact: true }).fill("preserved password");
         for (const [provider, label] of [
@@ -346,23 +347,7 @@ async function runChecks() {
         assert.equal(await help.getAttribute("aria-expanded"), "true");
         assert.equal(await details.getAttribute("open"), "");
         assert.equal(await details.locator(".account-service-statuses li").count(), 3);
-        await dialog.getByText("More services", { exact: true }).click();
-        for (const [id, label] of [
-          ["bluesky", "Bluesky"],
-          ["fluxer", "Fluxer"],
-          ["stoat", "Stoat"],
-          ["hey", "hey.xyz"],
-          ["mastodon", "Mastodon"],
-        ]) {
-          const button = dialog.getByRole("button", { name: `${label} availability`, exact: true });
-          await button.click();
-          const explanation = dialog.locator(`[data-provider-info='${id}']`);
-          await explanation.waitFor();
-          assert.ok((await explanation.innerText()).includes(label));
-          assert.equal(await button.getAttribute("aria-pressed"), "true");
-          assert.equal(await dialog.locator(".account-setup-details").count(), 0);
-        }
-        assert.equal(providerRequests.length, 5, "Informational choices never call authentication");
+        assert.equal(providerRequests.length, 5, "Owner diagnostics do not invoke authentication");
         assert.equal(
           await dialog.getByLabel("Email address", { exact: true }).inputValue(),
           "preserved@example.com",

@@ -11,18 +11,18 @@ const supported = [
   ["github", "GitHub"],
   ["twitch", "Twitch"],
 ];
-const planned = [
-  ["bluesky", "Bluesky", /AT Protocol|DPoP|DID/i],
-  ["fluxer", "Fluxer", /application|OAuth|verif/i],
-  ["stoat", "Stoat", /account control|OAuth|integrat/i],
-  ["hey", "hey.xyz", /Lens|wallet/i],
-  ["mastodon", "Mastodon", /server|instance/i],
-];
+const unsupported = ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"];
 const authorizations = {
   google:
     "https://accounts.google.com/o/oauth2/v2/auth?client_id=google-fixture&response_type=code&state=google-fixture-state",
   discord:
     "https://discord.com/oauth2/authorize?client_id=discord-fixture&response_type=code&state=discord-fixture-state",
+  twitter:
+    "https://x.com/i/oauth2/authorize?client_id=twitter-fixture&response_type=code&state=twitter-fixture-state",
+  github:
+    "https://github.com/login/oauth/authorize?client_id=github-fixture&response_type=code&state=github-fixture-state",
+  twitch:
+    "https://id.twitch.tv/oauth2/authorize?client_id=twitch-fixture&response_type=code&state=twitch-fixture-state",
 };
 const allProviders = Object.fromEntries(supported.map(([id]) => [id, true]));
 const browser = await chromium.launch({
@@ -49,8 +49,16 @@ let configuration = {
   passkeys: false,
 };
 let configurationMode = "pending";
-let oauthMode = "success";
+let oauthMode = "stay";
 let deployment = { preview: false };
+const pendingOAuth = new Map();
+async function releaseOAuth() {
+  const pending = [...pendingOAuth.entries()];
+  for (const [release] of pending) release();
+  await Promise.all(pending.map(([, done]) => done));
+}
+let releaseNavigation = null;
+let navigationStarted = null;
 const pendingConfigurations = new Map();
 async function releaseConfiguration(value) {
   const pending = [...pendingConfigurations.entries()];
@@ -99,11 +107,17 @@ await context.route("**/*", async (route) => {
   const url = new URL(request.url());
   if (url.origin !== origin) {
     if (
-      oauthMode === "redirect" &&
+      ["redirect", "redirect-gated"].includes(oauthMode) &&
       Object.values(authorizations).includes(url.href) &&
       request.isNavigationRequest()
     ) {
       authorizationNavigations.push(url.href);
+      if (oauthMode === "redirect-gated") {
+        navigationStarted?.();
+        await new Promise((resolve) => {
+          releaseNavigation = resolve;
+        });
+      }
       return route.fulfill({
         status: 200,
         contentType: "text/html",
@@ -114,6 +128,12 @@ await context.route("**/*", async (route) => {
     return route.abort("blockedbyclient");
   }
   if (url.pathname === "/api/deployment") return json(route, deployment);
+  if (url.pathname === "/fixture-embed")
+    return route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><title>Embedded sign-in fixture</title><link rel="icon" href="data:,"><iframe title="Embedded sign-in" src="${origin}/login" style="width:100%;height:100vh;border:0"></iframe>`,
+    });
   if (!url.pathname.startsWith("/api/auth/")) return route.continue();
   const path = url.pathname.slice("/api/auth/".length);
   if (path === "config") {
@@ -169,9 +189,51 @@ await context.route("**/*", async (route) => {
         { code: "ACCOUNT_SETUP_REQUIRED", message: "Account sign-in needs website setup." },
         503,
       );
-    if (oauthMode === "redirect")
-      return json(route, { url: authorizations[body.provider], redirect: true });
-    return json(route, { url: `${origin}/fixture-authorize`, redirect: false });
+    if (oauthMode === "hang") {
+      let release;
+      const wait = new Promise((resolve) => {
+        release = resolve;
+      });
+      let complete;
+      const done = new Promise((resolve) => {
+        complete = resolve;
+      });
+      pendingOAuth.set(release, done);
+      try {
+        await wait;
+        await json(route, { url: authorizations[body.provider], redirect: false }).catch(
+          () => undefined,
+        );
+      } finally {
+        pendingOAuth.delete(release);
+        complete();
+      }
+      return;
+    }
+    if (oauthMode === "html")
+      return route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Unexpected sign-in page</title>",
+      });
+    if (oauthMode === "malformed-json")
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{invalid-json" });
+    if (oauthMode === "empty")
+      return route.fulfill({ status: 200, contentType: "application/json", body: "" });
+    if (oauthMode === "missing-url") return json(route, {});
+    if (oauthMode === "unsafe-url")
+      return json(route, {
+        url: "https://attacker.invalid/authorize?state=unsafe-fixture",
+        redirect: false,
+      });
+    if (["redirect", "redirect-gated"].includes(oauthMode))
+      return json(route, { url: authorizations[body.provider], redirect: false });
+    // Initiation-only checks deliberately return an explicit error, never a fake successful URL.
+    return json(
+      route,
+      { code: "FIXTURE_STAY", message: "Authorization fixture kept this page open." },
+      503,
+    );
   }
   unexpectedAuthRequests.push(`${request.method()} ${path}`);
   return json(route, { message: "Unexpected provider UI fixture request." }, 404);
@@ -293,7 +355,13 @@ async function initiate(providerId, label, linking = false) {
   await button.click();
   await response;
   await page.waitForFunction(() => !document.querySelector(".account-provider[disabled]"));
-  return providerRequests.at(-1);
+  const recorded = providerRequests.at(-1);
+  assert.equal(
+    recorded.body.disableRedirect,
+    true,
+    "The app owns validated authorization navigation",
+  );
+  return recorded;
 }
 async function setupHelp() {
   const before = providerRequests.length;
@@ -306,14 +374,20 @@ async function setupHelp() {
   assert.equal(providerRequests.length, before, "Explicit setup help never starts OAuth");
   return details;
 }
+async function assertUnsupportedRemoved() {
+  const panel = page.locator(".account-panel");
+  assert.equal(await panel.getByText("More services", { exact: true }).count(), 0);
+  assert.equal(
+    await panel.locator(".account-provider-info, .account-provider-explanation").count(),
+    0,
+  );
+  for (const label of unsupported)
+    assert.equal(await panel.getByText(label, { exact: true }).count(), 0);
+}
 async function assertNoProviderActions() {
   assert.equal(await page.locator(".account-provider-options").count(), 0);
   assert.equal(await page.locator(".account-provider").count(), 0);
-  for (const [, label] of planned)
-    assert.equal(
-      await page.getByRole("button", { name: `${label} availability`, exact: true }).count(),
-      0,
-    );
+  await assertUnsupportedRemoved();
 }
 try {
   await openLogin("/login", false);
@@ -350,7 +424,7 @@ try {
       );
       assert.equal(new URL(page.url()).origin, origin);
       assert.equal(await page.locator(".account-setup-details").count(), 0);
-      oauthMode = "success";
+      oauthMode = "stay";
     },
   );
 
@@ -424,7 +498,11 @@ try {
     await assertDirectChoices();
     assert.equal((await initiate("google", "Google")).body.provider, "google");
     await releaseConfiguration(configuration);
-    assert.equal(await failedOptions().count(), 1);
+    assert.equal(
+      await page.locator(".account-provider-options[data-availability='unavailable']").count(),
+      1,
+      "A late metadata response stays unavailable while the actual OAuth error remains visible",
+    );
     configurationMode = "ready";
     await page.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
     await readyConfiguration();
@@ -448,9 +526,99 @@ try {
         await page.locator(".account-panel").innerText(),
         /provider-secret|PROVIDER_NOT_FOUND/,
       );
-      oauthMode = "success";
+      oauthMode = "stay";
     },
   );
+
+  for (const [mode, description] of [
+    ["html", "HTML"],
+    ["malformed-json", "malformed JSON"],
+    ["empty", "an empty body"],
+    ["missing-url", "a missing authorization URL"],
+    ["unsafe-url", "an unsafe authorization URL"],
+  ]) {
+    await check(
+      `${description} produces visible feedback instead of a silent sign-in`,
+      async () => {
+        oauthMode = mode;
+        const before = authorizationNavigations.length;
+        const request = await initiate("google", "Google");
+        assert.equal(request.body.provider, "google");
+        const feedback = page.locator(".account-error[role='alert']");
+        await feedback.waitFor();
+        assert.ok((await feedback.innerText()).trim().length > 0);
+        if (mode === "unsafe-url")
+          assert.doesNotMatch(await feedback.innerText(), /attacker\.invalid|unsafe-fixture/);
+        await page.waitForFunction(
+          () => document.querySelector(".account-error[role='alert']") === document.activeElement,
+        );
+        assert.equal(new URL(page.url()).origin, origin);
+        assert.equal(authorizationNavigations.length, before);
+        assert.equal(await page.locator(".account-social-continue").count(), 0);
+        await enabledChoices();
+        oauthMode = "stay";
+      },
+    );
+  }
+  await check(
+    "a stalled authorization request times out, ignores late success, and permits retry",
+    async () => {
+      oauthMode = "hang";
+      const before = providerRequests.length;
+      const navigationsBefore = authorizationNavigations.length;
+      const started = page.waitForRequest(
+        (request) => new URL(request.url()).pathname === "/api/auth/sign-in/social",
+      );
+      await page.getByRole("button", { name: "Continue with Google", exact: true }).click();
+      await started;
+      await page.getByRole("button", { name: "Cancel sign-in", exact: true }).waitFor();
+      assert.equal(await page.locator(".account-provider:disabled").count(), 5);
+      const opening = page.getByRole("button", { name: "Continue with Google", exact: true });
+      assert.equal(await opening.getAttribute("aria-busy"), "true");
+      assert.match(await opening.innerText(), /Opening Google/);
+      const feedback = page.locator(".account-error[role='alert']");
+      await feedback.waitFor({ timeout: 18_000 });
+      assert.match(await feedback.innerText(), /timed out|too long|try again/i);
+      await page.waitForFunction(
+        () => document.querySelector(".account-error[role='alert']") === document.activeElement,
+      );
+      await enabledChoices();
+      assert.equal(
+        providerRequests.length,
+        before + 1,
+        "The hung operation is not automatically retried",
+      );
+      await releaseOAuth();
+      assert.equal(authorizationNavigations.length, navigationsBefore);
+      assert.equal(await page.locator(".account-social-continue").count(), 0);
+      oauthMode = "stay";
+      await initiate("google", "Google");
+      assert.equal(
+        providerRequests.length,
+        before + 2,
+        "A deliberate retry can start a fresh request",
+      );
+    },
+  );
+  await check("cancel releases a pending sign-in and a late response cannot navigate", async () => {
+    oauthMode = "hang";
+    const before = authorizationNavigations.length;
+    const started = page.waitForRequest(
+      (request) => new URL(request.url()).pathname === "/api/auth/sign-in/social",
+    );
+    await page.getByRole("button", { name: "Continue with Discord", exact: true }).click();
+    await started;
+    await page.getByRole("button", { name: "Cancel sign-in", exact: true }).click();
+    await enabledChoices();
+    await releaseOAuth();
+    assert.equal(authorizationNavigations.length, before);
+    assert.equal(await page.locator(".account-social-continue").count(), 0);
+    assert.equal(
+      await page.getByRole("button", { name: "Cancel sign-in", exact: true }).count(),
+      0,
+    );
+    oauthMode = "stay";
+  });
 
   for (const [id, label] of supported.slice(0, 2)) {
     await openLogin("/login?next=%2Fprovider-fixture");
@@ -470,9 +638,146 @@ try {
       assert.equal(callbackPath(request).searchParams.get("next"), "/provider-fixture");
       assert.equal(request.duration, "1d");
       assert.equal(request.remember, "false");
-      oauthMode = "success";
+      assert.equal(request.body.disableRedirect, true);
+      oauthMode = "stay";
     });
   }
+
+  await openLogin("/login?next=%2Fprovider-fixture");
+  await check(
+    "a validated provider link remains available while automatic navigation is pending",
+    async () => {
+      oauthMode = "redirect-gated";
+      const started = new Promise((resolve) => {
+        navigationStarted = resolve;
+      });
+      let reportFallback;
+      const fallbackReady = new Promise((resolve) => {
+        reportFallback = resolve;
+      });
+      await page.exposeFunction("reportSocialFallback", (snapshot) => reportFallback(snapshot));
+      await page.evaluate(() => {
+        let reported = false;
+        const capture = () => {
+          const provider = document.querySelector(".account-social-continue");
+          const freshTab = [...document.querySelectorAll("a")].find(
+            (link) => link.textContent === "Open sign-in page in a new tab",
+          );
+          if (reported || !provider || !freshTab) return;
+          reported = true;
+          void window.reportSocialFallback({
+            provider: {
+              href: provider.href,
+              target: provider.target,
+              rel: provider.rel,
+              text: provider.textContent,
+            },
+            freshTab: { href: freshTab.href, target: freshTab.target, rel: freshTab.rel },
+            persistedState: [localStorage, sessionStorage].some((storage) =>
+              Object.values(storage).some((value) => value.includes("google-fixture-state")),
+            ),
+          });
+          observer.disconnect();
+        };
+        const observer = new MutationObserver(capture);
+        observer.observe(document.body, { childList: true, subtree: true });
+        window.addEventListener("beforeunload", capture, { once: true });
+        capture();
+      });
+      await page
+        .getByRole("button", { name: "Continue with Google", exact: true })
+        .click({ noWaitAfter: true });
+      await started;
+      let fallbackDeadline;
+      const fallback = await Promise.race([
+        fallbackReady,
+        new Promise((_, reject) => {
+          fallbackDeadline = setTimeout(
+            () => reject(new Error("Fallback link was not committed before navigation")),
+            8_000,
+          );
+        }),
+      ]).finally(() => clearTimeout(fallbackDeadline));
+      assert.equal(fallback.provider?.href, authorizations.google);
+      assert.equal(fallback.provider?.target, "_blank");
+      assert.match(fallback.provider?.rel ?? "", /noopener/);
+      assert.match(fallback.provider?.rel ?? "", /noreferrer/);
+      assert.equal(fallback.provider?.text, "Continue to Google");
+      assert.equal(new URL(fallback.freshTab.href).origin, origin);
+      assert.equal(new URL(fallback.freshTab.href).pathname, "/login");
+      assert.equal(new URL(fallback.freshTab.href).searchParams.has("state"), false);
+      assert.equal(fallback.freshTab.target, "_blank");
+      assert.equal(
+        fallback.persistedState,
+        false,
+        "Authorization state must remain in memory only",
+      );
+      releaseNavigation();
+      releaseNavigation = null;
+      navigationStarted = null;
+      await page.waitForURL(authorizations.google);
+      await page.getByRole("heading", { name: "Authorization fixture", exact: true }).waitFor();
+      oauthMode = "stay";
+    },
+  );
+
+  await check(
+    "an embedded app keeps its sign-in page and offers a fresh top-level login",
+    async () => {
+      oauthMode = "redirect";
+      const before = authorizationNavigations.length;
+      const settingsRequested = page.waitForRequest(
+        (request) =>
+          new URL(request.url()).pathname === "/api/auth/config" &&
+          request.frame() !== page.mainFrame(),
+      );
+      await page.goto(`${origin}/fixture-embed`, { waitUntil: "domcontentloaded" });
+      await settingsRequested;
+      const frame = page.frameLocator('iframe[title="Embedded sign-in"]');
+      const google = frame.getByRole("button", { name: "Continue with Google", exact: true });
+      await google.waitFor();
+      await page.waitForFunction(() => {
+        const document = window.frames[0]?.document;
+        return (
+          document &&
+          document.querySelectorAll(".account-provider").length === 5 &&
+          !document.querySelector(".account-provider:disabled")
+        );
+      });
+      const started = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === "/api/auth/sign-in/social",
+      );
+      await google.click();
+      await started;
+      const freshTab = frame.getByRole("link", {
+        name: "Open sign-in page in a new tab",
+        exact: true,
+      });
+      await freshTab.waitFor();
+      const destination = new URL(await freshTab.getAttribute("href"), origin);
+      assert.equal(destination.origin, origin);
+      assert.equal(destination.pathname, "/login");
+      assert.equal(destination.searchParams.has("state"), false);
+      assert.equal(destination.searchParams.has("provider"), false);
+      assert.equal(await freshTab.getAttribute("target"), "_blank");
+      assert.match(await freshTab.getAttribute("rel"), /noopener/);
+      assert.equal(await frame.locator(".account-social-continue").count(), 0);
+      assert.equal(page.url(), `${origin}/fixture-embed`);
+      assert.equal(
+        page
+          .frames()
+          .find((entry) => entry !== page.mainFrame())
+          .url(),
+        `${origin}/login`,
+      );
+      assert.equal(
+        authorizationNavigations.length,
+        before,
+        "An embedded app never navigates its frame to the provider",
+      );
+      oauthMode = "stay";
+    },
+  );
 
   await openLogin("/login?next=%2Fprovider-fixture");
   await check(
@@ -513,33 +818,23 @@ try {
     },
   );
   await check(
-    "unsupported identities stay informational even when metadata claims they are enabled",
+    "unsupported platforms are absent even when metadata claims they are enabled",
     async () => {
       configuration = {
         ...configuration,
-        providers: { ...allProviders, bluesky: true, mastodon: true },
+        providers: {
+          ...allProviders,
+          bluesky: true,
+          fluxer: true,
+          stoat: true,
+          hey: true,
+          mastodon: true,
+        },
       };
       await openLogin();
-      const before = providerRequests.length;
-      await setupHelp();
-      await page.getByText("More services", { exact: true }).click();
-      for (const [id, label, reason] of planned) {
-        const button = page.getByRole("button", { name: `${label} availability`, exact: true });
-        await button.click();
-        const explanation = page.locator(`[data-provider-info='${id}']`);
-        await explanation.waitFor();
-        assert.ok((await explanation.innerText()).includes(label));
-        assert.match(await explanation.innerText(), reason);
-        assert.equal(await button.getAttribute("aria-pressed"), "true");
-        assert.equal(await page.locator(".account-setup-details").count(), 0);
-      }
-      assert.equal(providerRequests.length, before);
-      assert.equal(
-        await page.locator(".account-provider[data-provider-action='oauth']").count(),
-        5,
-      );
+      await assertUnsupportedRemoved();
+      await assertDirectChoices();
       await initiate("google", "Google");
-      assert.equal(await page.locator(".account-provider-explanation").count(), 0);
     },
   );
 
@@ -547,7 +842,7 @@ try {
   await openLogin("/login", false);
   await readyConfiguration();
   await check(
-    "session discovery blocks every OAuth action while independent information remains available",
+    "session discovery blocks every OAuth action while owner help remains available",
     async () => {
       const before = providerRequests.length;
       assert.equal(await page.locator(".account-provider:disabled").count(), 5);
@@ -556,9 +851,8 @@ try {
           .getByRole("button", { name: `Continue with ${label}`, exact: true })
           .dispatchEvent("click");
       assert.equal(providerRequests.length, before);
-      await page.getByText("More services", { exact: true }).click();
-      await page.getByRole("button", { name: "Bluesky availability", exact: true }).click();
-      await page.locator("[data-provider-info='bluesky']").waitFor();
+      await setupHelp();
+      await assertUnsupportedRemoved();
       assert.equal(providerRequests.length, before);
       holdSession = false;
       await releaseSessions();
@@ -796,7 +1090,11 @@ try {
       );
       assert.deepEqual(unexpectedAuthRequests, []);
       assert.deepEqual(unexpectedExternalRequests, []);
-      assert.deepEqual(authorizationNavigations, Object.values(authorizations));
+      assert.deepEqual(authorizationNavigations, [
+        authorizations.google,
+        authorizations.discord,
+        authorizations.google,
+      ]);
       assert.ok(
         providerRequests.every((request) =>
           supported.some(([id]) => id === (request.body.provider ?? request.body.providerId)),
@@ -812,6 +1110,8 @@ try {
   holdSession = false;
   await releaseSessions();
   await releaseConfiguration(configuration);
+  await releaseOAuth();
+  releaseNavigation?.();
   await context.close();
   await browser.close();
 }

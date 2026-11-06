@@ -49,12 +49,11 @@ try {
   );
   assert.equal(
     await panel.locator('.account-provider[data-provider-action="oauth"]').count(),
-    Object.values(configuration.providers).filter(Boolean).length,
+    5,
+    "Implemented provider buttons remain direct actions independently of configuration flags",
   );
-  assert.match(
-    await panel.locator(".account-provider-note").textContent(),
-    /website owner needs to enable social sign-in/,
-  );
+  assert.equal(await panel.locator(".account-provider-info").count(), 0);
+  assert.equal(await panel.getByText("More services", { exact: true }).count(), 0);
   assert.equal(
     await panel
       .getByRole("heading")
@@ -119,7 +118,7 @@ try {
   await security.getByText("No passkeys saved to this account.", { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS real UI native virtual-authenticator enrollment, list, rename, sign out, passkey sign-in, default one-day duration and remove; compact unavailable-provider note.",
+    "PASS real UI native virtual-authenticator enrollment, list, rename, sign out, passkey sign-in, default one-day duration and remove; five implemented OAuth choices.",
   );
 } finally {
   await browser.close();

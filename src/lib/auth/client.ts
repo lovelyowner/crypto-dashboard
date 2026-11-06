@@ -3,8 +3,10 @@ import { createAuthClient } from "better-auth/react";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { passkeyRequestSignal } from "./passkeys-browser";
 import { isSupportedSocialProviderId } from "./providers";
+import { requestSocialAuthorization } from "./social-authorization";
 
 export const authClient = createAuthClient({
+  disableDefaultFetchPlugins: true,
   plugins: [usernameClient(), twoFactorClient(), passkeyClient()],
   fetchOptions: {
     onRequest(context) {
@@ -25,11 +27,16 @@ export function getBearerToken(): null {
 export async function signIn(providerId: string, options?: { callbackURL?: string }) {
   if (!isSupportedSocialProviderId(providerId))
     throw new Error("This sign-in service is not integrated.");
-  const response = await authClient.signIn.social({
-    provider: providerId,
-    callbackURL: options?.callbackURL ?? "/",
-  });
-  if (response.error) throw new Error(response.error.message || "Sign-in failed.");
+  const result = await requestSocialAuthorization(providerId, (signal) =>
+    authClient.signIn.social({
+      provider: providerId,
+      callbackURL: options?.callbackURL ?? "/",
+      errorCallbackURL: "/login",
+      disableRedirect: true,
+      fetchOptions: { signal, retry: 0 },
+    }),
+  );
+  window.location.assign(result.kind === "two-factor" ? "/login?twoFactor=1" : result.url);
 }
 export async function signOut(redirectTo?: string) {
   const response = await authClient.signOut();

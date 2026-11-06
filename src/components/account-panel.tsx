@@ -31,7 +31,7 @@ import { useAuthConfiguration } from "@/lib/auth/use-configuration";
 import { socialReturnError, socialReturnPath } from "@/lib/auth/social-return";
 import { AccountSetupStatus } from "./account-setup";
 import { AccountDataExport } from "./account-data-export";
-import { socialAuthError } from "@/lib/auth/social-error";
+import { requestSocialAuthorization } from "@/lib/auth/social-authorization";
 import "./account.css";
 
 type LinkedAccount = { id: string; providerId: string; accountId: string };
@@ -80,6 +80,14 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [socialPending, setSocialPending] = useState<SupportedSocialProviderId | null>(null);
+  const [socialContinuation, setSocialContinuation] = useState<{
+    provider: SupportedSocialProviderId;
+    url: string;
+    embedded: boolean;
+  } | null>(null);
+  const socialOperation = useRef<AbortController | null>(null);
+  const errorMessage = useRef<HTMLParagraphElement | null>(null);
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [setup, setSetup] = useState<Setup | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -97,6 +105,28 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const passkeyOperation = useRef<AbortController | null>(null);
   const user = session?.user;
   const twoFactorEnabled = Boolean(user?.twoFactorEnabled);
+
+  useEffect(() => {
+    setSocialContinuation(null);
+    return () => socialOperation.current?.abort();
+  }, [mode, user?.id, challenge]);
+
+  useEffect(() => {
+    if (!socialContinuation || socialContinuation.embedded) return;
+    try {
+      window.location.assign(socialContinuation.url);
+    } catch {
+      setError(
+        `Your browser could not open ${socialProviderLabel(socialContinuation.provider)}. Use the continuation link below.`,
+      );
+    }
+  }, [socialContinuation]);
+
+  useEffect(() => {
+    if (!error) return;
+    errorMessage.current?.focus({ preventScroll: true });
+    errorMessage.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
 
   useEffect(() => {
     setPasskeySupported(browserSupportsPasskeys(configuration?.passkeyOrigin));
@@ -158,6 +188,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const run = async (operation: () => Promise<void>) => {
     setError("");
     setNotice("");
+    setSocialContinuation(null);
     setBusy(true);
     try {
       await operation();
@@ -249,27 +280,51 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         configuration.signInOrigin !== currentOrigin
       )
         throw new Error("Open the configured sign-in website before continuing with a service.");
-      const result = linking
-        ? await authClient.linkSocial({
-            provider,
-            callbackURL: socialReturnPath(returnTo),
-            errorCallbackURL: socialReturnPath(returnTo),
-          })
-        : await authClient.signIn.social({
-            provider,
-            callbackURL: socialReturnPath(returnTo),
-            errorCallbackURL: socialReturnPath(returnTo),
-            fetchOptions: {
-              headers: {
-                [SESSION_DURATION_HEADER]: sessionDuration,
-                "x-fathom-remember-me": String(rememberMe),
+      const controller = new AbortController();
+      socialOperation.current?.abort();
+      socialOperation.current = controller;
+      setSocialPending(provider);
+      try {
+        const result = await requestSocialAuthorization(
+          provider,
+          (signal) => {
+            const options = {
+              provider,
+              callbackURL: socialReturnPath(returnTo),
+              errorCallbackURL: socialReturnPath(returnTo),
+              disableRedirect: true,
+              fetchOptions: {
+                signal,
+                retry: 0,
+                ...(!linking
+                  ? {
+                      headers: {
+                        [SESSION_DURATION_HEADER]: sessionDuration,
+                        "x-fathom-remember-me": String(rememberMe),
+                      },
+                    }
+                  : {}),
               },
-            },
-          });
-      if (result.error) throw new Error(socialAuthError(provider, result.error));
-      if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) {
-        setMode("login");
-        setChallenge(true);
+            };
+            return linking ? authClient.linkSocial(options) : authClient.signIn.social(options);
+          },
+          { signal: controller.signal },
+        );
+        if (controller.signal.aborted) return;
+        if (result.kind === "two-factor") {
+          setMode("login");
+          setChallenge(true);
+          return;
+        }
+        const embedded = window.self !== window.top;
+        setSocialContinuation({ provider, url: result.url, embedded });
+      } catch (cause) {
+        if (!controller.signal.aborted) throw cause;
+      } finally {
+        if (socialOperation.current === controller) {
+          socialOperation.current = null;
+          setSocialPending(null);
+        }
       }
     });
 
@@ -303,6 +358,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           accounts={accounts}
           linking={linking}
           busy={busy}
+          pendingProvider={socialPending}
           authPending={isPending}
           helpOpen={Boolean(setupRequest)}
           onConnect={connect}
@@ -383,8 +439,56 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
 
   const accountFeedback = (
     <>
+      {socialPending && (
+        <div className="account-social-progress">
+          <p className="account-help" role="status">
+            Connecting to {socialProviderLabel(socialPending)}…
+          </p>
+          <button
+            className="account-text-button"
+            type="button"
+            onClick={() => socialOperation.current?.abort()}
+          >
+            Cancel sign-in
+          </button>
+        </div>
+      )}
+      {socialContinuation && (
+        <div className="account-social-continuation">
+          <p className="account-help" role="status">
+            {socialContinuation.embedded
+              ? `Social sign-in needs a full browser tab. Open the sign-in page below, then choose ${socialProviderLabel(socialContinuation.provider)} again.`
+              : `Opening ${socialProviderLabel(socialContinuation.provider)}… If this page stays open, use the link below.`}
+          </p>
+          <div className="account-actions">
+            {!socialContinuation.embedded && (
+              <a
+                className="account-secondary account-social-continue"
+                href={socialContinuation.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Continue to {socialProviderLabel(socialContinuation.provider)}
+              </a>
+            )}
+            <a
+              className="account-text-button"
+              href={socialReturnPath(returnTo)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open sign-in page in a new tab
+            </a>
+          </div>
+        </div>
+      )}
       {(error || configurationError) && (
-        <p className={error ? "account-message account-error" : "account-help"} role="alert">
+        <p
+          ref={errorMessage}
+          tabIndex={error ? -1 : undefined}
+          className={error ? "account-message account-error" : "account-help"}
+          role="alert"
+        >
           {error || configurationError}
         </p>
       )}
