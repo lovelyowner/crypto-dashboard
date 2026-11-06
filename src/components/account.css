@@ -123,29 +123,6 @@
   width: 16px;
   height: 16px;
 }
-.account-segment {
-  display: flex;
-  padding: 4px;
-  background: var(--ui-background);
-  border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  gap: 4px;
-}
-.account-segment button {
-  flex: 1;
-  color: var(--ui-text-2);
-  border: 0;
-  background: var(--ui-background);
-  border-radius: 6px;
-  padding: 8px;
-}
-.account-segment button[aria-pressed="true"] {
-  background: var(--ui-background);
-  color: var(--ui-text-3);
-  outline: 1px solid var(--ui-border);
-  outline-offset: -1px;
-  font-weight: 600;
-}
 .account-form-links {
   display: flex;
   flex-wrap: wrap;

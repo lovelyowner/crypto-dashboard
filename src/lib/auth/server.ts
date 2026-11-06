@@ -18,6 +18,7 @@ import { resolveDeploymentConfiguration } from "../deployment-config.js";
 import { configuredSocialProviders } from "./social-providers.server.js";
 import { readPublicAuthConfiguration } from "./public-settings.server.js";
 import { accountPasskeys, accountTwoFactor, passkeyPolicyPlugin } from "./passkeys.server.js";
+import { identifierSignIn } from "./identifier-sign-in.server.js";
 
 const env = (name: string) => process.env[name]?.trim() || undefined;
 const deployment = resolveDeploymentConfiguration(process.env, import.meta.env?.PROD === true);
@@ -116,6 +117,7 @@ export const auth = betterAuth({
   rateLimit: ACCOUNT_RATE_LIMIT_POLICY,
   advanced: { cookiePrefix: "fathom", useSecureCookies: production },
   plugins: [
+    identifierSignIn(),
     username({
       minUsernameLength: 1,
       maxUsernameLength: 128,

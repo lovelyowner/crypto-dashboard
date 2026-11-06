@@ -63,6 +63,10 @@ try {
     true,
   );
   assert.equal(await panel.getByRole("combobox").count(), 0);
+  const identifier = panel.getByLabel("Email or username", { exact: true });
+  assert.equal(await identifier.getAttribute("type"), "text");
+  assert.equal(await identifier.getAttribute("autocomplete"), "username");
+  assert.equal(await panel.locator(".account-segment").count(), 0);
   await panel.getByRole("button", { name: "New here? Create an account", exact: true }).click();
   await panel
     .getByLabel("Email address", { exact: true })

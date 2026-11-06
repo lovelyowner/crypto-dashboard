@@ -29,16 +29,48 @@ test("missing-provider failures identify the service and registered application 
   }
 });
 
-test("generic HTTP failures never imply missing account or OAuth configuration", () => {
-  for (const status of [404, 503]) {
+test("explicit HTTP error messages retain their meaning instead of implying missing configuration", () => {
+  for (const status of [401, 403, 404, 429, 500, 503]) {
     assert.equal(
       socialAuthError("google", { status, message: "Account service is temporarily unavailable." }),
       "Account service is temporarily unavailable.",
     );
-    const fallback = socialAuthError("google", { status });
-    assert.match(fallback, /^Could not start Google sign-in/);
-    assert.doesNotMatch(fallback, /not enabled|not set up|register|configure/);
   }
+});
+
+test("non-JSON access failures identify the HTTP status without guessing a missing OAuth application", () => {
+  for (const status of [401, 403]) {
+    const message = socialAuthError("google", { status });
+    assert.match(message, /^Google sign-in was blocked by this website/);
+    assert.ok(message.includes(`HTTP ${status}`));
+    assert.match(message, /full browser tab|deployment access/);
+    assert.doesNotMatch(message, /not enabled|not set up|register|credentials are missing/);
+  }
+});
+
+test("non-JSON missing routes, rate limits, and server failures have distinct actionable errors", () => {
+  const missing = socialAuthError("discord", { status: 404 });
+  assert.match(missing, /Discord.*account API.*HTTP 404/);
+  assert.match(missing, /API routing/);
+  const limited = socialAuthError("twitter", { status: 429 });
+  assert.match(limited, /Twitter \/ X.*too many attempts.*HTTP 429/);
+  assert.match(limited, /Wait before trying again/);
+  for (const status of [500, 502, 503, 504, 599]) {
+    const failed = socialAuthError("github", { status });
+    assert.match(failed, /GitHub.*account server is unavailable/);
+    assert.ok(failed.includes(`HTTP ${status}`));
+    assert.match(failed, /function logs/);
+    assert.doesNotMatch(failed, /not enabled|not set up|register|credentials are missing/);
+  }
+});
+
+test("unknown and invalid HTTP statuses get a safe provider-labelled retry fallback", () => {
+  assert.match(socialAuthError("google", { status: 400 }), /Google.*HTTP 400.*try again/);
+  for (const status of [undefined, 0, NaN, Infinity, -1, 200, 999])
+    assert.equal(
+      socialAuthError("google", { status }),
+      "Could not start Google sign-in. Please try again.",
+    );
 });
 
 test("existing policy errors remain actionable and empty failures get the provider label", () => {

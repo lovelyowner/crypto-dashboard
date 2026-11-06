@@ -210,6 +210,15 @@ await context.route("**/*", async (route) => {
       }
       return;
     }
+    if (oauthMode.startsWith("http-status-")) {
+      const status = Number(oauthMode.slice("http-status-".length));
+      return route.fulfill({
+        status,
+        contentType: "text/html",
+        headers: { "x-vercel-id": "iad1::fixture-123" },
+        body: "<!doctype html><title>private-provider-details</title>",
+      });
+    }
     if (oauthMode === "html")
       return route.fulfill({
         status: 200,
@@ -302,6 +311,18 @@ async function assertMinimalSignIn() {
     0,
   );
   assert.equal(await panel.getByRole("combobox").count(), 0);
+  assert.equal(await panel.locator(".account-segment").count(), 0);
+  assert.equal(await panel.getByRole("button", { name: "Email", exact: true }).count(), 0);
+  assert.equal(await panel.getByRole("button", { name: "Username", exact: true }).count(), 0);
+  const identifier = panel.getByLabel("Email or username", { exact: true });
+  if (await identifier.count()) {
+    assert.equal(await identifier.getAttribute("type"), "text");
+    assert.equal(await identifier.getAttribute("autocomplete"), "username");
+    assert.equal(
+      await panel.getByRole("button", { name: "Sign in", exact: true }).isEnabled(),
+      true,
+    );
+  }
   assert.equal(await panel.getByText("Sign in again after", { exact: true }).count(), 0);
   assert.equal(
     await panel.getByRole("checkbox", { name: "Remember me in this browser", exact: true }).count(),
@@ -529,6 +550,64 @@ try {
       oauthMode = "stay";
     },
   );
+
+  for (const status of [403, 404, 429, 500]) {
+    await check(
+      `a non-JSON HTTP ${status} sign-in failure reports its cause instead of generic retry`,
+      async () => {
+        oauthMode = `http-status-${status}`;
+        const before = authorizationNavigations.length;
+        await initiate("google", "Google");
+        const error = page.locator(".account-error[role='alert']");
+        await error.waitFor();
+        assert.match(await error.innerText(), new RegExp(`HTTP ${status}`));
+        assert.doesNotMatch(
+          await error.innerText(),
+          /private-provider-details|<!doctype|Could not start Google sign-in/i,
+        );
+        assert.equal(authorizationNavigations.length, before);
+        assert.equal(new URL(page.url()).origin, origin);
+        if ([403, 500].includes(status)) {
+          const details = await setupHelp();
+          const diagnostic = details.locator(".account-request-diagnostic");
+          await diagnostic.waitFor();
+          assert.match(
+            await diagnostic.innerText(),
+            new RegExp(`Last Google request: HTTP ${status}`),
+          );
+          assert.match(await diagnostic.innerText(), /text\/html/);
+          assert.match(await diagnostic.innerText(), /iad1::fixture-123/);
+          assert.doesNotMatch(
+            await diagnostic.innerText(),
+            /private-provider-details|<!doctype|google-fixture-state/,
+          );
+          await page.evaluate(() =>
+            Object.defineProperty(navigator, "clipboard", {
+              configurable: true,
+              value: {
+                writeText: async (text) => {
+                  window.httpDiagnosticChecklist = text;
+                },
+              },
+            }),
+          );
+          await details.getByRole("button", { name: "Copy setup checklist", exact: true }).click();
+          await details.getByRole("status").filter({ hasText: "Setup checklist copied" }).waitFor();
+          const report = await page.evaluate(() => window.httpDiagnosticChecklist);
+          assert.match(report, new RegExp(`Last Google request: HTTP ${status}`));
+          assert.match(report, /Response type: text\/html/);
+          assert.match(report, /Vercel request ID: iad1::fixture-123/);
+          assert.doesNotMatch(
+            report,
+            /private-provider-details|<!doctype|google-fixture-state|set-cookie|authorization:/i,
+          );
+          await details.getByRole("button", { name: "Close setup help", exact: true }).click();
+        }
+        await enabledChoices();
+        oauthMode = "stay";
+      },
+    );
+  }
 
   for (const [mode, description] of [
     ["html", "HTML"],

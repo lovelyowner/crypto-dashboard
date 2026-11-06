@@ -36,6 +36,8 @@ The current sign-in fix also replaces extensionless server imports with explicit
 
 Authorization now has a 12-second deadline, cancellation, explicit validation/navigation, and a manual continuation link. Missing or malformed authorization responses produce focused visible errors. Removed the unfinished Bluesky/Fluxer/Stoat/hey.xyz/Mastodon entries and their More services panel.
 
+The password form now has one Email or username field. A rate-limited server rewrite resolves registered emails first, then NFC usernames, and performs one native credential check without account fallback. The latest social HTTP response status/type and safe request ID are copyable from owner setup, so non-JSON deployment errors no longer collapse into a generic retry message. Full-tab recovery is also offered before an authorization URL exists.
+
 ## Add next
 
 1. **Enable and verify real Google/Discord login:** configure the isolated Preview account settings, register provider applications on the stable sign-in origin, and test callback, recovery, and account-linking flows there. Configuration flags do not prove provider connectivity.

@@ -24,8 +24,12 @@ const signInRequests = [];
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("request", (request) => {
   const path = new URL(request.url()).pathname;
-  if (["/api/auth/sign-up/email", "/api/auth/sign-in/username"].includes(path))
-    signInRequests.push({ path, duration: request.headers()["x-fathom-session-duration"] });
+  if (["/api/auth/sign-up/email", "/api/auth/sign-in/identifier"].includes(path))
+    signInRequests.push({
+      path,
+      duration: request.headers()["x-fathom-session-duration"],
+      identifier: request.postDataJSON()?.identifier,
+    });
 });
 await context.route("**/*", (route) =>
   new URL(route.request().url()).origin === origin
@@ -87,6 +91,12 @@ try {
     await panel.getByRole("checkbox", { name: "Remember me in this browser", exact: true }).count(),
     1,
   );
+  const identifierField = panel.getByLabel("Email or username", { exact: true });
+  assert.equal(await identifierField.getAttribute("type"), "text");
+  assert.equal(await identifierField.getAttribute("autocomplete"), "username");
+  assert.equal(await panel.locator(".account-segment").count(), 0);
+  assert.equal(await panel.getByRole("button", { name: "Email", exact: true }).count(), 0);
+  assert.equal(await panel.getByRole("button", { name: "Username", exact: true }).count(), 0);
   await panel.getByRole("button", { name: "New here? Create an account", exact: true }).click();
   assert.equal(
     await panel
@@ -115,6 +125,28 @@ try {
       );
       assert.equal(session.user.username, username.normalize("NFC"));
       await panel.getByRole("heading", { name: "Account & security", exact: true }).waitFor();
+    },
+  );
+  await panel.getByRole("button", { name: "Sign out", exact: true }).click();
+  await panel
+    .getByRole("button", { name: "Already have an account? Sign in", exact: true })
+    .click();
+  await panel.getByLabel("Email or username", { exact: true }).fill(email.toUpperCase());
+  await panel.locator('input[autocomplete="current-password"]').fill(password);
+  await panel.getByRole("button", { name: "Sign in", exact: true }).click();
+  await panel.getByRole("button", { name: "Sign out", exact: true }).waitFor();
+  await check(
+    "the merged identifier field signs in using an email without changing modes",
+    async () => {
+      const session = await getSession();
+      assert.equal(session.user.username, username.normalize("NFC"));
+      const login = signInRequests.findLast(
+        (request) => request.path === "/api/auth/sign-in/identifier",
+      );
+      assert.equal(login.identifier, email.toUpperCase());
+      assert.equal(login.duration, "1d");
+      const remaining = new Date(session.session.expiresAt).getTime() - Date.now();
+      assert.ok(remaining > 86_370_000 && remaining <= 86_400_000);
     },
   );
   await panel.locator('input[autocomplete="current-password"]').fill(password);
@@ -238,25 +270,30 @@ try {
   await check("sign-out removes the actual server session", async () => {
     assert.ok(!(await getSession())?.user);
   });
-  await panel.getByRole("button", { name: "Username", exact: true }).click();
-  await panel.locator('input[autocomplete="username"]').fill(username);
+  await panel.getByLabel("Email or username", { exact: true }).fill(username);
   await panel.locator('input[autocomplete="current-password"]').fill(password);
   assert.equal(await panel.getByRole("combobox").count(), 0);
   await panel.getByRole("button", { name: "Sign in", exact: true }).click();
   await panel.getByLabel("Authenticator code", { exact: true }).waitFor();
-  await check("username/password login waits for the enrolled authenticator", async () => {
-    assert.ok(!(await getSession())?.user);
-    await panel.getByRole("heading", { name: "Verify it’s you", exact: true }).waitFor();
-    assert.equal(await panel.locator(".account-provider-options").count(), 0);
-    assert.equal(
-      signInRequests.find((request) => request.path === "/api/auth/sign-in/username")?.duration,
-      "1d",
-    );
-    assert.equal(
-      await panel.getByRole("button", { name: "Verify & sign in", exact: true }).count(),
-      1,
-    );
-  });
+  await check(
+    "the same merged identifier field signs in with a Unicode username and waits for 2FA",
+    async () => {
+      assert.ok(!(await getSession())?.user);
+      await panel.getByRole("heading", { name: "Verify it’s you", exact: true }).waitFor();
+      assert.equal(await panel.locator(".account-provider-options").count(), 0);
+      assert.equal(
+        signInRequests.findLast(
+          (request) =>
+            request.path === "/api/auth/sign-in/identifier" && request.identifier === username,
+        )?.duration,
+        "1d",
+      );
+      assert.equal(
+        await panel.getByRole("button", { name: "Verify & sign in", exact: true }).count(),
+        1,
+      );
+    },
+  );
   await panel.getByLabel("Authenticator code", { exact: true }).fill(totp(secret));
   await panel.getByRole("button", { name: "Verify & sign in", exact: true }).click();
   await panel.getByRole("button", { name: "Sign out", exact: true }).waitFor();

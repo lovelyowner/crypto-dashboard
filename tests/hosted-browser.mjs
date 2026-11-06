@@ -255,37 +255,64 @@ async function runChecks() {
     );
     await page.getByRole("button", { name: "Open account", exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await check("hosted account panel clearly requires setup and disables sign-in", async () => {
-      await dialog
-        .getByRole("alert")
-        .filter({ hasText: /^Account sign-in needs website setup\.$/ })
-        .waitFor();
-      assert.equal(
-        await dialog.getByRole("button", { name: "Sign in", exact: true }).isDisabled(),
-        true,
-      );
-      assert.equal(
+    await check(
+      "hosted merged sign-in sends a real request and explains missing account setup",
+      async () => {
         await dialog
-          .getByRole("heading")
-          .evaluateAll((headings) =>
-            headings.every((heading) => heading.classList.contains("sr-only")),
-          ),
-        true,
-      );
-      assert.equal(await dialog.getByRole("combobox").count(), 0);
-      assert.equal(
-        await dialog
-          .locator(".account-heading:visible, .account-intro:visible, .account-divider:visible")
-          .count(),
-        0,
-      );
-      assert.equal(
-        await dialog
-          .getByRole("checkbox", { name: "Remember me in this browser", exact: true })
-          .count(),
-        1,
-      );
-    });
+          .getByRole("alert")
+          .filter({ hasText: /^Account sign-in needs website setup\.$/ })
+          .waitFor();
+        const identifier = dialog.getByLabel("Email or username", { exact: true });
+        assert.equal(await identifier.getAttribute("type"), "text");
+        assert.equal(await identifier.getAttribute("autocomplete"), "username");
+        assert.equal(await dialog.locator(".account-segment").count(), 0);
+        assert.equal(await dialog.getByRole("button", { name: "Email", exact: true }).count(), 0);
+        assert.equal(
+          await dialog.getByRole("button", { name: "Username", exact: true }).count(),
+          0,
+        );
+        assert.equal(
+          await dialog.getByRole("button", { name: "Sign in", exact: true }).isEnabled(),
+          true,
+        );
+        await identifier.fill("hosted @ username 🌙");
+        await dialog.getByLabel("Password", { exact: true }).fill("disposable hosted password");
+        const failedLogin = page.waitForResponse(
+          (response) => new URL(response.url()).pathname === "/api/auth/sign-in/identifier",
+        );
+        await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
+        const response = await failedLogin;
+        assert.equal(response.status(), 503);
+        assert.equal(response.request().postDataJSON().identifier, "hosted @ username 🌙");
+        assert.equal(response.request().headers()["x-fathom-session-duration"], "1d");
+        await dialog.locator(".account-error[role='alert']").waitFor();
+        assert.match(
+          await dialog.locator(".account-error[role='alert']").innerText(),
+          /account.*setup|website.*setup|not.*configured|authentication.*requires/i,
+        );
+        assert.equal(
+          await dialog
+            .getByRole("heading")
+            .evaluateAll((headings) =>
+              headings.every((heading) => heading.classList.contains("sr-only")),
+            ),
+          true,
+        );
+        assert.equal(await dialog.getByRole("combobox").count(), 0);
+        assert.equal(
+          await dialog
+            .locator(".account-heading:visible, .account-intro:visible, .account-divider:visible")
+            .count(),
+          0,
+        );
+        assert.equal(
+          await dialog
+            .getByRole("checkbox", { name: "Remember me in this browser", exact: true })
+            .count(),
+          1,
+        );
+      },
+    );
     await check(
       "hosted social actions call the real API and explain missing account setup without fake redirects",
       async () => {
@@ -316,7 +343,7 @@ async function runChecks() {
         assert.equal(await dialog.getByText("More services", { exact: true }).count(), 0);
         for (const label of ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"])
           assert.equal(await dialog.getByText(label, { exact: true }).count(), 0);
-        await dialog.getByLabel("Email address", { exact: true }).fill("preserved@example.com");
+        await dialog.getByLabel("Email or username", { exact: true }).fill("preserved@example.com");
         await dialog.getByLabel("Password", { exact: true }).fill("preserved password");
         for (const [provider, label] of [
           ["google", "Google"],
@@ -349,7 +376,7 @@ async function runChecks() {
         assert.equal(await details.locator(".account-service-statuses li").count(), 3);
         assert.equal(providerRequests.length, 5, "Owner diagnostics do not invoke authentication");
         assert.equal(
-          await dialog.getByLabel("Email address", { exact: true }).inputValue(),
+          await dialog.getByLabel("Email or username", { exact: true }).inputValue(),
           "preserved@example.com",
         );
         assert.equal(
@@ -389,9 +416,18 @@ async function runChecks() {
       await reset.getByRole("heading", { name: "Recover access", exact: true }).waitFor();
       await reset.getByLabel("New password", { exact: false }).waitFor();
       assert.equal(
-        await reset.getByRole("button", { name: "Set new password", exact: true }).isDisabled(),
+        await reset.getByRole("button", { name: "Set new password", exact: true }).isEnabled(),
         true,
       );
+      await reset
+        .getByLabel("New password", { exact: true })
+        .fill("hosted-reset-disposable-password");
+      const failedReset = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === "/api/auth/reset-password",
+      );
+      await reset.getByRole("button", { name: "Set new password", exact: true }).click();
+      assert.equal((await failedReset).status(), 503);
+      await reset.locator(".account-error[role='alert']").waitFor();
     });
     await check(
       "hosted public routes distinguish unavailable publishing without loading accounts or drafts",

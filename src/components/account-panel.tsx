@@ -32,6 +32,10 @@ import { socialReturnError, socialReturnPath } from "@/lib/auth/social-return";
 import { AccountSetupStatus } from "./account-setup";
 import { AccountDataExport } from "./account-data-export";
 import { requestSocialAuthorization } from "@/lib/auth/social-authorization";
+import {
+  readAuthRequestDiagnostic,
+  type AuthRequestDiagnostic,
+} from "@/lib/auth/request-diagnostic";
 import "./account.css";
 
 type LinkedAccount = { id: string; providerId: string; accountId: string };
@@ -53,8 +57,24 @@ async function request<T>(
       : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message || "The request failed. Please retry.");
+  if (readAuthRequestDiagnostic(response).responseType !== "application/json")
+    throw new Error(
+      `The account API returned HTTP ${response.status} without a JSON response. The website owner should check API routing and deployment access.`,
+    );
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(
+      `The account API returned an unreadable response (HTTP ${response.status}). Please retry.`,
+    );
+  }
+  if (!response.ok)
+    throw new Error(
+      result?.code === "ACCOUNT_SETUP_REQUIRED"
+        ? "Account sign-in is not set up on this website. Open Website sign-in setup for the required settings."
+        : result?.message || `The account request failed (HTTP ${response.status}). Please retry.`,
+    );
   return result as T;
 }
 
@@ -67,7 +87,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     retry: reloadConfiguration,
   } = useAuthConfiguration();
   const [mode, setMode] = useState<"login" | "signup" | "recover" | "reset">("login");
-  const [identifierKind, setIdentifierKind] = useState<"email" | "username">("email");
   const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -81,6 +100,10 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [socialPending, setSocialPending] = useState<SupportedSocialProviderId | null>(null);
+  const [socialFailure, setSocialFailure] = useState<SupportedSocialProviderId | null>(null);
+  const [socialDiagnostic, setSocialDiagnostic] = useState<
+    (AuthRequestDiagnostic & { provider: SupportedSocialProviderId }) | null
+  >(null);
   const [socialContinuation, setSocialContinuation] = useState<{
     provider: SupportedSocialProviderId;
     url: string;
@@ -108,6 +131,8 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     setSocialContinuation(null);
+    setSocialDiagnostic(null);
+    setSocialFailure(null);
     return () => socialOperation.current?.abort();
   }, [mode, user?.id, challenge]);
 
@@ -189,6 +214,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     setError("");
     setNotice("");
     setSocialContinuation(null);
+    setSocialFailure(null);
     setBusy(true);
     try {
       await operation();
@@ -253,10 +279,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         return;
       }
       const response = await request<{ twoFactorRedirect?: boolean }>(
-        identifierKind === "username" ? "sign-in/username" : "sign-in/email",
+        "sign-in/identifier",
         {
-          [identifierKind]:
-            identifierKind === "username" ? normalizeUsername(identifier) : identifier,
+          identifier,
           password,
           rememberMe,
         },
@@ -284,6 +309,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       socialOperation.current?.abort();
       socialOperation.current = controller;
       setSocialPending(provider);
+      setSocialDiagnostic(null);
       try {
         const result = await requestSocialAuthorization(
           provider,
@@ -296,6 +322,10 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               fetchOptions: {
                 signal,
                 retry: 0,
+                onResponse: ({ response }: { response: Response }) => {
+                  if (!controller.signal.aborted && socialOperation.current === controller)
+                    setSocialDiagnostic({ provider, ...readAuthRequestDiagnostic(response) });
+                },
                 ...(!linking
                   ? {
                       headers: {
@@ -319,7 +349,10 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         const embedded = window.self !== window.top;
         setSocialContinuation({ provider, url: result.url, embedded });
       } catch (cause) {
-        if (!controller.signal.aborted) throw cause;
+        if (!controller.signal.aborted) {
+          setSocialFailure(provider);
+          throw cause;
+        }
       } finally {
         if (socialOperation.current === controller) {
           socialOperation.current = null;
@@ -338,6 +371,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       configuration={configuration}
       availability={configurationStatus}
       request={setupRequest}
+      diagnostic={socialDiagnostic}
       onRetry={() => {
         setError("");
         reloadConfiguration();
@@ -492,6 +526,16 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           {error || configurationError}
         </p>
       )}
+      {error && socialFailure && !socialContinuation && (
+        <a
+          className="account-text-button"
+          href={socialReturnPath(returnTo)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open sign-in page in a new tab
+        </a>
+      )}
       {configurationStatus === "unavailable" && !setupHelp && (
         <button
           className="account-text-button"
@@ -603,25 +647,13 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             ) : (
               <>
                 {mode === "login" && (
-                  <div className="account-segment" aria-label="Sign in using">
-                    {(["email", "username"] as const).map((kind) => (
-                      <button
-                        type="button"
-                        key={kind}
-                        aria-pressed={identifierKind === kind}
-                        onClick={() => setIdentifierKind(kind)}
-                      >
-                        {kind === "email" ? "Email" : "Username"}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {mode === "login" && (
                   <label>
-                    {identifierKind === "email" ? "Email address" : "Username"}
+                    Email or username
                     <input
-                      type={identifierKind === "email" ? "email" : "text"}
-                      autoComplete={identifierKind === "email" ? "email" : "username"}
+                      type="text"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
                       value={identifier}
                       onChange={(event) => setIdentifier(event.target.value)}
                       required
@@ -681,9 +713,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               className="account-primary"
               disabled={
                 busy ||
-                !configuration?.configured ||
+                isPending ||
                 Boolean(otherSignInOrigin) ||
-                (mode === "recover" && !configuration.emailRecovery)
+                (mode === "recover" && !configuration?.emailRecovery)
               }
               type="submit"
             >

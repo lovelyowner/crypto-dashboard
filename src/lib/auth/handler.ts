@@ -1,3 +1,4 @@
+import { normalizeIdentifierSignInResponse } from "./identifier-sign-in.server.js";
 import { isFreshAccountSession } from "./policy.js";
 import {
   auth,
@@ -59,5 +60,9 @@ export async function handleAuthRequest(request: Request) {
       );
     }
   }
-  return auth.handler(request);
+  const response = await auth.handler(request);
+  return request.method === "POST" &&
+    new URL(request.url).pathname.replace(/\/+$/, "") === "/api/auth/sign-in/identifier"
+    ? normalizeIdentifierSignInResponse(response)
+    : response;
 }

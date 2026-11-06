@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { PublicAuthConfiguration } from "@/lib/auth/public-configuration";
 import { socialProviderLabel, type SupportedSocialProviderId } from "@/lib/auth/providers";
+import type { AuthRequestDiagnostic } from "@/lib/auth/request-diagnostic";
 
 export function AccountSetupStatus({
   configuration,
   availability,
   request,
+  diagnostic,
   onRetry,
   onClose,
 }: {
   configuration: PublicAuthConfiguration | null;
   availability: "loading" | "ready" | "unavailable";
   request?: { provider: SupportedSocialProviderId | null; version: number } | null;
+  diagnostic?: (AuthRequestDiagnostic & { provider: SupportedSocialProviderId }) | null;
   onRetry: () => void;
   onClose?: () => void;
 }) {
@@ -40,6 +43,13 @@ export function AccountSetupStatus({
         `${provider.toUpperCase()}_CLIENT_ID / ${provider.toUpperCase()}_CLIENT_SECRET: ${configuration ? (configuration.providers[provider] ? "configured" : "not enabled") : "Unknown"}`,
     ),
     `OAuth callback format: ${configuration?.signInOrigin ?? "<stable HTTPS origin>"}/api/auth/callback/<provider>`,
+    ...(diagnostic
+      ? [
+          `Last ${socialProviderLabel(diagnostic.provider)} request: HTTP ${diagnostic.status}`,
+          `Response type: ${diagnostic.responseType}`,
+          ...(diagnostic.requestId ? [`Vercel request ID: ${diagnostic.requestId}`] : []),
+        ]
+      : []),
     ...(!configuration
       ? [
           "Unknown means the website settings could not be read; it does not establish that credentials are missing.",
@@ -63,6 +73,20 @@ export function AccountSetupStatus({
           ? "The website owner can use this checklist to finish account setup. These checks show settings are present; they do not test provider connections."
           : "Settings are unknown because the website has not returned valid sign-in information. This does not mean provider credentials are missing."}
       </p>
+      {diagnostic && (
+        <p className="account-help account-request-diagnostic">
+          Last {socialProviderLabel(diagnostic.provider)} request: HTTP {diagnostic.status};{" "}
+          {diagnostic.responseType}.
+          {diagnostic.requestId && (
+            <>
+              {" "}
+              Request ID: <span>{diagnostic.requestId}</span>.
+            </>
+          )}{" "}
+          The website owner can use this response information to inspect deployment access and
+          function logs.
+        </p>
+      )}
       <ul className="account-service-statuses">
         {(
           [
