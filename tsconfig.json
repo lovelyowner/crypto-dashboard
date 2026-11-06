@@ -18,7 +18,8 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src", "server", "api", "review"]
 }

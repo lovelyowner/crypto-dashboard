@@ -1,11 +1,11 @@
-import { handleAuthRequest } from "./auth/handler";
-import { handleProfileRequest } from "./profile.server";
-import { handleContactRequest } from "./contact.server";
-import { handlePaymentRequest } from "./payments.server";
-import { handleModerationRequest } from "./moderation.server";
-import { handlePublicationRequest, handlePublicProfileRequest } from "./publication.server";
-import { handleDeploymentStatusRequest } from "./deployment-status";
-import { handleAccountExportRequest } from "./account-export.server";
+import { handleAuthRequest } from "./auth/handler.js";
+import { handleProfileRequest } from "./profile.server.js";
+import { handleContactRequest } from "./contact.server.js";
+import { handlePaymentRequest } from "./payments.server.js";
+import { handleModerationRequest } from "./moderation.server.js";
+import { handlePublicationRequest, handlePublicProfileRequest } from "./publication.server.js";
+import { handleDeploymentStatusRequest } from "./deployment-status.js";
+import { handleAccountExportRequest } from "./account-export.server.js";
 
 /** Shared same-origin API for the Node server and Vercel functions. */
 export async function handleApiRequest(request: Request): Promise<Response> {

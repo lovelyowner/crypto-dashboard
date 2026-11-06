@@ -13,7 +13,7 @@
 | Repeated promotional copy         | Simplified address/activity empty states and wallet instructions; removed duplicate sidebar and network promotional cards.                                                                                                                                                                                                                 |
 | Sidebar cleanup and action layout | Removed the Fathom brand block, curved active-navigation marker, and Workspace tools heading/divider. Kept accessible navigation and compact contextual wallet/address actions.                                                                                                                                                            |
 | Social sign-in choices            | Google, Discord, Twitter/X, GitHub, and Twitch adapters, with configured buttons for sign-in and linking. Supported choices sit below the form and account links; missing services open setup help without moving focus. Other services show explanations inside More services. Registered provider credentials are required for live use. |
-| Sign-in availability recovery     | One loading indicator, an eight-second request/body deadline, validated public configuration, and an explicit retry after errors. Failed or incomplete responses never enable sign-in controls.                                                                                                                                            |
+| Sign-in availability recovery     | One loading indicator, an eight-second request/body deadline, validated public configuration, and an explicit retry after errors. Failed or incomplete responses allow status/help selection but never enable OAuth requests.                                                                                                              |
 
 ## Applied in this batch
 
@@ -31,6 +31,8 @@
 | Independent sign-in settings | The public configuration request is handled before loading the authentication SDK or starting storage. The response preserves preview isolation and contains only presence flags and public origins.                                                                           |
 
 The development changes also include the exact white/gray palette, simpler headers, inbox search/unread filters, conversation drafts, copying, and an offline sample inbox preview. Search covers loaded messages and latest replies. Development uses the `preview` branch; production stays on `main`. Check Vercel for deployment readiness as described in the [preview workflow](preview-workflow.md).
+
+The current sign-in fix also replaces extensionless server imports with explicit Node-compatible paths and validates compiled API JavaScript without `tsx`. During a settings failure, supported service buttons select diagnostics and retry instead of becoming dead controls; unknown configuration is never presented as missing credentials.
 
 ## Add next
 

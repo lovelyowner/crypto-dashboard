@@ -1,4 +1,4 @@
-import { normalizePublicHandle } from "./public-profile";
+import { normalizePublicHandle } from "./public-profile.js";
 
 /** Application entry points cannot be claimed as new top-level creator IDs. */
 export const RESERVED_ROOT_HANDLES = [

@@ -5,19 +5,19 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Pool } from "pg";
-import { getPglite } from "../db";
-import { pgliteDialect } from "./pglite-dialect";
+import { getPglite } from "../db.js";
+import { pgliteDialect } from "./pglite-dialect.js";
 import {
   isValidUsername,
   normalizeUsername,
   ACCOUNT_SESSION_POLICY,
   ACCOUNT_RATE_LIMIT_POLICY,
-} from "./policy";
-import { sessionDurationPlugin } from "./session-duration";
-import { resolveDeploymentConfiguration } from "../deployment-config";
-import { configuredSocialProviders } from "./social-providers.server";
-import { readPublicAuthConfiguration } from "./public-settings.server";
-import { accountPasskeys, accountTwoFactor, passkeyPolicyPlugin } from "./passkeys.server";
+} from "./policy.js";
+import { sessionDurationPlugin } from "./session-duration.js";
+import { resolveDeploymentConfiguration } from "../deployment-config.js";
+import { configuredSocialProviders } from "./social-providers.server.js";
+import { readPublicAuthConfiguration } from "./public-settings.server.js";
+import { accountPasskeys, accountTwoFactor, passkeyPolicyPlugin } from "./passkeys.server.js";
 
 const env = (name: string) => process.env[name]?.trim() || undefined;
 const deployment = resolveDeploymentConfiguration(process.env, import.meta.env?.PROD === true);
@@ -138,4 +138,4 @@ export function getAuthEncryptionSecret(): string {
 export const SESSION_TOKEN_COOKIE = production
   ? "__Secure-fathom.session_token"
   : "fathom.session_token";
-export { GROK_PROVIDERS } from "./providers";
+export { GROK_PROVIDERS } from "./providers.js";

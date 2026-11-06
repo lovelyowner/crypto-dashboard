@@ -1,7 +1,7 @@
-import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
-import { getSql } from "./db";
-import { createModerationHandler } from "./moderation-handler";
-import { createSqlModerationStore } from "./moderation-store";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server.js";
+import { getSql } from "./db.js";
+import { createModerationHandler } from "./moderation-handler.js";
+import { createSqlModerationStore } from "./moderation-store.js";
 
 export async function handleModerationRequest(request: Request): Promise<Response> {
   if (!authConfigured)

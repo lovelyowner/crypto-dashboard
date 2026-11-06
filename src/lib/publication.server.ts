@@ -1,7 +1,7 @@
-import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
-import { getSql } from "./db";
-import { createPublicationHandlers } from "./publication-handler";
-import { createSqlPublicationStore } from "./publication-store";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server.js";
+import { getSql } from "./db.js";
+import { createPublicationHandlers } from "./publication-handler.js";
+import { createSqlPublicationStore } from "./publication-store.js";
 
 const origin = authOrigin;
 const handlers = createPublicationHandlers({

@@ -4,13 +4,13 @@ import {
   authIsProduction,
   authOrigin,
   getAuthEncryptionSecret,
-} from "./auth/server";
-import { getSql } from "./db";
-import { createSqlContactStore } from "./contact-store";
-import { createSqlPaymentStore } from "./payment-store";
-import { createPaymentHandler } from "./payment-handler";
-import { createEthereumPaymentVerifier } from "./ethereum-payment";
-import { createNowPaymentsClient } from "./nowpayments";
+} from "./auth/server.js";
+import { getSql } from "./db.js";
+import { createSqlContactStore } from "./contact-store.js";
+import { createSqlPaymentStore } from "./payment-store.js";
+import { createPaymentHandler } from "./payment-handler.js";
+import { createEthereumPaymentVerifier } from "./ethereum-payment.js";
+import { createNowPaymentsClient } from "./nowpayments.js";
 
 const origin = authOrigin ?? "http://localhost:8080";
 const allowedOrigins = authIsProduction ? [origin] : [origin, "http://127.0.0.1:8080"];

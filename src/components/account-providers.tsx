@@ -12,6 +12,7 @@ type Props = {
   accounts: readonly { providerId: string }[];
   linking: boolean;
   busy: boolean;
+  authPending: boolean;
   selectedProvider: SupportedSocialProviderId | null;
   onConnect: (provider: SupportedSocialProviderId, linking: boolean) => void;
   onSetup: (provider: SupportedSocialProviderId) => void;
@@ -24,6 +25,7 @@ export function AccountProviders({
   accounts,
   linking,
   busy,
+  authPending,
   selectedProvider,
   onConnect,
   onSetup,
@@ -65,14 +67,12 @@ export function AccountProviders({
               className="account-provider"
               type="button"
               key={provider.providerId}
-              disabled={busy || availability !== "ready"}
+              disabled={busy || (ready && authPending)}
               data-provider-id={provider.providerId}
               aria-pressed={!ready ? selectedProvider === provider.providerId : undefined}
-              data-provider-action={
-                availability !== "ready" ? "pending" : ready ? "oauth" : "setup"
-              }
+              data-provider-action={availability !== "ready" ? "check" : ready ? "oauth" : "setup"}
               onClick={() => {
-                if (availability !== "ready") return;
+                if (busy || (ready && authPending)) return;
                 setInfoProvider(null);
                 if (ready) {
                   onDismissSetup();
@@ -83,7 +83,7 @@ export function AccountProviders({
               }}
               aria-label={
                 availability !== "ready"
-                  ? `${provider.label} sign-in`
+                  ? `${provider.label} sign-in status`
                   : ready
                     ? `${linking ? "Connect" : "Continue with"} ${provider.label}`
                     : `${provider.label} sign-in setup`
@@ -94,11 +94,15 @@ export function AccountProviders({
               </span>
               <span>
                 <span>{linking && connected ? `${provider.label} connected` : provider.label}</span>
-                {availability === "ready" && (
-                  <small>
-                    {ready ? (linking ? "Connect account" : "Continue") : "Setup needed"}
-                  </small>
-                )}
+                <small>
+                  {availability !== "ready"
+                    ? "Check status"
+                    : ready
+                      ? linking
+                        ? "Connect account"
+                        : "Continue"
+                      : "Setup needed"}
+                </small>
               </span>
             </button>
           );

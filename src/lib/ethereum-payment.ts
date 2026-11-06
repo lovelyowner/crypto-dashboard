@@ -1,4 +1,4 @@
-import { isValidAddress, normalizeAddress } from "./chains";
+import { isValidAddress, normalizeAddress } from "./chains.js";
 
 const DEFAULT_RPC_URL = "https://ethereum-rpc.publicnode.com";
 const MAX_RPC_BYTES = 1024 * 1024;

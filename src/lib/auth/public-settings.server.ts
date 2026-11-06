@@ -1,11 +1,11 @@
-import { resolveDeploymentConfiguration } from "../deployment-config";
-import { passkeyConfiguration } from "./passkey-configuration";
-import { readAccountSetup } from "./setup";
+import { resolveDeploymentConfiguration } from "../deployment-config.js";
+import { passkeyConfiguration } from "./passkey-configuration.js";
+import { readAccountSetup } from "./setup.js";
 import {
   configuredSocialProviders,
   socialProviderAvailability,
   socialSignInOrigin,
-} from "./social-providers.server";
+} from "./social-providers.server.js";
 
 /** Public presence flags only. Reading these settings never initializes authentication or storage. */
 export function readPublicAuthConfiguration(

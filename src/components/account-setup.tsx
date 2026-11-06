@@ -8,11 +8,15 @@ import {
 
 export function AccountSetupStatus({
   configuration,
+  availability,
   request,
+  onRetry,
   onClose,
 }: {
   configuration: PublicAuthConfiguration | null;
+  availability: "loading" | "ready" | "unavailable";
   request?: { provider: SupportedSocialProviderId; version: number } | null;
+  onRetry: () => void;
   onClose?: () => void;
 }) {
   const [notice, setNotice] = useState("");
@@ -22,45 +26,66 @@ export function AccountSetupStatus({
     details.current.open = true;
   }, [request]);
   if (
-    !configuration?.setup ||
-    (configuration.configured &&
+    (!configuration && !request) ||
+    (configuration && !configuration.setup) ||
+    (configuration?.configured &&
       SOCIAL_PROVIDERS.filter((provider) => provider.supported).every(
         (provider) => configuration.providers[provider.providerId] === true,
       ))
   )
     return null;
-  const setup = configuration.setup;
-  const prefix = setup.environment === "preview" ? "PREVIEW_" : "";
+  const setup = configuration?.setup;
+  const prefix = setup?.environment === "preview" ? "PREVIEW_" : "";
+  const settingName = (name: string) => (setup ? `${prefix}${name}` : `${name} / PREVIEW_${name}`);
+  const reportStatus = (value: boolean | undefined, needed = "needed") =>
+    value === undefined ? "Unknown" : value ? "configured" : needed;
   const report = [
-    `Website sign-in setup (${setup.environment})`,
-    `${prefix}DATABASE_URL: ${setup.database ? "configured" : "needed"}`,
-    `${prefix}BETTER_AUTH_SECRET: ${setup.secret ? "configured" : "needed (at least 32 random characters)"}`,
-    `${prefix}BETTER_AUTH_URL: ${setup.origin ? "configured" : "needed (exact stable HTTPS origin)"}`,
+    `Website sign-in setup (${setup?.environment ?? "Unknown environment"})`,
+    ...(!configuration
+      ? [`Configuration request: ${availability === "loading" ? "Loading" : "Unavailable"}`]
+      : []),
+    `${settingName("DATABASE_URL")}: ${reportStatus(setup?.database)}`,
+    `${settingName("BETTER_AUTH_SECRET")}: ${reportStatus(setup?.secret, "needed (at least 32 random characters)")}`,
+    `${settingName("BETTER_AUTH_URL")}: ${reportStatus(setup?.origin, "needed (exact stable HTTPS origin)")}`,
     ...["google", "discord", "twitter", "github", "twitch"].map(
       (provider) =>
-        `${provider.toUpperCase()}_CLIENT_ID / ${provider.toUpperCase()}_CLIENT_SECRET: ${configuration.providers[provider] ? "configured" : "not enabled"}`,
+        `${provider.toUpperCase()}_CLIENT_ID / ${provider.toUpperCase()}_CLIENT_SECRET: ${configuration ? (configuration.providers[provider] ? "configured" : "not enabled") : "Unknown"}`,
     ),
-    `OAuth callback format: ${configuration.signInOrigin ?? "<stable HTTPS origin>"}/api/auth/callback/<provider>`,
+    `OAuth callback format: ${configuration?.signInOrigin ?? "<stable HTTPS origin>"}/api/auth/callback/<provider>`,
+    ...(!configuration
+      ? [
+          "Unknown means the website settings could not be read; it does not establish that credentials are missing.",
+        ]
+      : []),
     "Configure these in the matching server environment, register callbacks with each provider, then redeploy. This checklist contains no credential values.",
   ].join("\n");
   return (
     <details ref={details} className="account-service-details account-setup-details">
       <summary>Website sign-in setup</summary>
+      {!configuration && request && (
+        <p className="account-help account-setup-availability" role="status">
+          {socialProviderLabel(request.provider)} sign-in availability{" "}
+          {availability === "loading"
+            ? "is still being checked."
+            : "could not be checked. Retry to load this website’s sign-in settings."}
+        </p>
+      )}
       <p className="account-help">
-        The website owner can use this checklist to finish account setup. These checks show settings
-        are present; they do not test provider connections.
+        {configuration
+          ? "The website owner can use this checklist to finish account setup. These checks show settings are present; they do not test provider connections."
+          : "Settings are unknown because the website has not returned valid sign-in information. This does not mean provider credentials are missing."}
       </p>
       <ul className="account-service-statuses">
         {(
           [
-            ["Account storage", setup.database],
-            ["Account security", setup.secret],
-            ["Sign-in address", setup.origin],
+            ["Account storage", setup?.database],
+            ["Account security", setup?.secret],
+            ["Sign-in address", setup?.origin],
           ] as const
         ).map(([label, ready]) => (
           <li key={label}>
             <span className="account-service-name">{label}</span>
-            <span>{ready ? "Configured" : "Needs setup"}</span>
+            <span>{ready === undefined ? "Unknown" : ready ? "Configured" : "Needs setup"}</span>
           </li>
         ))}
         {request && (
@@ -69,18 +94,30 @@ export function AccountSetupStatus({
               {socialProviderLabel(request.provider)} sign-in
             </span>
             <span>
-              {configuration.configured && configuration.providers[request.provider] === true
-                ? "Configured"
-                : "Needs setup"}
+              {!configuration
+                ? "Unknown"
+                : configuration.configured && configuration.providers[request.provider] === true
+                  ? "Configured"
+                  : "Needs setup"}
             </span>
           </li>
         )}
       </ul>
-      {request && (
+      {request && configuration && (
         <p className="account-help">
           {socialProviderLabel(request.provider)} needs its registered application ID, client
           secret, and exact website callback URL configured by the website owner.
         </p>
+      )}
+      {!configuration && availability === "unavailable" && (
+        <button
+          type="button"
+          className="account-secondary"
+          aria-label="Retry sign-in options"
+          onClick={onRetry}
+        >
+          Retry
+        </button>
       )}
       <button
         type="button"

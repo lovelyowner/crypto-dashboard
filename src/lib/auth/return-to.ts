@@ -1,4 +1,4 @@
-import { getPublicProfilePath, publicHandleFromPath } from "../profile-url";
+import { getPublicProfilePath, publicHandleFromPath } from "../profile-url.js";
 
 /** Authentication may return only to a validated creator page on this site. */
 export function safeAccountReturnPath(value: unknown): string | null {

@@ -1,5 +1,5 @@
-import type { Sql } from "./db";
-import type { PaymentKind, PaymentMethod } from "./payment-types";
+import type { Sql } from "./db.js";
+import type { PaymentKind, PaymentMethod } from "./payment-types.js";
 
 export type StoredPaymentIntent = {
   id: string;

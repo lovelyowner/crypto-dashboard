@@ -1,6 +1,6 @@
-import type { CreatorProfile } from "./creator-profile";
-import type { Sql } from "./db";
-import type { ProfileStore, StoredCreatorProfile } from "./profile-handler";
+import type { CreatorProfile } from "./creator-profile.js";
+import type { Sql } from "./db.js";
+import type { ProfileStore, StoredCreatorProfile } from "./profile-handler.js";
 
 /** SQL runs only on the server, through a connection held by this application. */
 export function createSqlProfileStore(sql: Pick<Sql, "query">): ProfileStore {

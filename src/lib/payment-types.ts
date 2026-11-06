@@ -1,5 +1,5 @@
-import { exactContactAmount, contactAmountUnits } from "./creator-contact";
-import { isValidAddress } from "./chains";
+import { exactContactAmount, contactAmountUnits } from "./creator-contact.js";
+import { isValidAddress } from "./chains.js";
 
 export type PaymentMethod = "ethereum" | "nowpayments";
 export type PaymentState = "pending" | "paid" | "failed" | "expired";

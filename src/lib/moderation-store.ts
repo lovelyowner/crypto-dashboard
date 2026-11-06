@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { Sql } from "./db";
-import type { ContactModeration, ModerationReport, ReportReason, ReportStatus } from "./moderation";
+import type { Sql } from "./db.js";
+import type {
+  ContactModeration,
+  ModerationReport,
+  ReportReason,
+  ReportStatus,
+} from "./moderation.js";
 
 const participantScope = `m.id=$1 and (m.sender_id=$2 or (m.recipient_id=$2 and m.payment_status<>'pending'))`;
 const counterpart = `case when m.recipient_id=$2 then m.sender_id else m.recipient_id end`;

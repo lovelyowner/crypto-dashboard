@@ -1,8 +1,8 @@
-import { auth, authConfigured } from "./auth/server";
-import { getSql } from "./db";
-import { createSqlProfileStore } from "./profile-store";
-import { createSqlPublicationStore } from "./publication-store";
-import { createAccountExportHandler } from "./account-export";
+import { auth, authConfigured } from "./auth/server.js";
+import { getSql } from "./db.js";
+import { createSqlProfileStore } from "./profile-store.js";
+import { createSqlPublicationStore } from "./publication-store.js";
+import { createAccountExportHandler } from "./account-export.js";
 
 export const handleAccountExportRequest = createAccountExportHandler({
   configured: authConfigured,

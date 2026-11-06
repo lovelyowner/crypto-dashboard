@@ -1,4 +1,4 @@
-import type { CreatorProfile } from "./creator-profile";
+import type { CreatorProfile } from "./creator-profile.js";
 
 export type DmMode = "closed" | "free" | "paid";
 export type ContactKind = "dm" | "donation";

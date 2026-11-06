@@ -1,4 +1,4 @@
-import { configuredAuthOrigin } from "./configuration";
+import { configuredAuthOrigin } from "./configuration.js";
 
 export type AccountSetup = {
   environment: "local" | "preview" | "production";

@@ -1,7 +1,7 @@
-import type { CreatorProfile } from "./creator-profile";
-import type { Sql } from "./db";
-import type { PublicationStore, StoredPublication } from "./publication-handler";
-import { PublicationConflictError } from "./public-profile";
+import type { CreatorProfile } from "./creator-profile.js";
+import type { Sql } from "./db.js";
+import type { PublicationStore, StoredPublication } from "./publication-handler.js";
+import { PublicationConflictError } from "./public-profile.js";
 
 function isUniqueConflict(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";

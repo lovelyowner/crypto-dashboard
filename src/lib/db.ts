@@ -1,5 +1,5 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
-import { resolveDeploymentConfiguration } from "./deployment-config";
+import { resolveDeploymentConfiguration } from "./deployment-config.js";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";

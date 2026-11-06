@@ -1,11 +1,11 @@
-import { isFreshAccountSession } from "@/lib/auth/policy";
+import { isFreshAccountSession } from "./policy.js";
 import {
   auth,
   authConfigured,
   authIsProduction,
   authOrigin,
   publicAuthConfiguration,
-} from "@/lib/auth/server";
+} from "./server.js";
 
 export async function handleAuthRequest(request: Request) {
   if (request.method === "GET" && new URL(request.url).pathname === "/api/auth/config")

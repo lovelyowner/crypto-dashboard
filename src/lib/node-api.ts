@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { resolveDeploymentConfiguration } from "./deployment-config";
+import { resolveDeploymentConfiguration } from "./deployment-config.js";
 
 /** Bounds auth and profile payloads even when Vercel has already parsed JSON. */
 export const MAX_API_BODY_BYTES = 128 * 1024;

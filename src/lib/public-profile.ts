@@ -1,4 +1,4 @@
-import { validateCreatorProfile, type CreatorProfile } from "./creator-profile";
+import { validateCreatorProfile, type CreatorProfile } from "./creator-profile.js";
 
 /** This public URL handle is separate from the unrestricted Unicode sign-in name. */
 export function normalizePublicHandle(value: unknown): string {

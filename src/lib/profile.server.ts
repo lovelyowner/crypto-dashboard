@@ -1,7 +1,7 @@
-import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
-import { getSql } from "./db";
-import { createProfileHandler } from "./profile-handler";
-import { createSqlProfileStore } from "./profile-store";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server.js";
+import { getSql } from "./db.js";
+import { createProfileHandler } from "./profile-handler.js";
+import { createSqlProfileStore } from "./profile-store.js";
 
 const configuredUrl = authOrigin;
 const allowedOrigins = configuredUrl

@@ -2,11 +2,11 @@ import { passkey } from "@better-auth/passkey";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { twoFactor } from "better-auth/plugins";
 import type { BetterAuthPlugin } from "better-auth";
-import { isFreshAccountSession } from "./policy";
-import { safeAccountReturnPath } from "./return-to";
-import { passkeyConfiguration } from "./passkey-configuration";
+import { isFreshAccountSession } from "./policy.js";
+import { safeAccountReturnPath } from "./return-to.js";
+import { passkeyConfiguration } from "./passkey-configuration.js";
 
-export { passkeyConfiguration } from "./passkey-configuration";
+export { passkeyConfiguration } from "./passkey-configuration.js";
 
 export const PASSKEY_AUTHENTICATION_PATH = "/passkey/verify-authentication";
 export const PASSKEY_REMEMBER_HEADER = "x-fathom-remember-me";

@@ -1,19 +1,19 @@
-import { normalizePublicHandle } from "./public-profile";
+import { normalizePublicHandle } from "./public-profile.js";
 import {
   validateContactSettings,
   validateContactMessageInput,
   validateContactText,
   type ContactConfiguration,
   type InboxFolder,
-} from "./creator-contact";
+} from "./creator-contact.js";
 import {
   contactMessageDto,
   contactThreadDto,
   validInboxCursor,
   type ContactStore,
-} from "./contact-store";
-import type { ProfileSession } from "./profile-handler";
-import { isContactBlockedError } from "./moderation";
+} from "./contact-store.js";
+import type { ProfileSession } from "./profile-handler.js";
+import { isContactBlockedError } from "./moderation.js";
 
 export type ContactSession = ProfileSession & { user: { id: string; name?: string | null } };
 export interface ContactHandlerDependencies {

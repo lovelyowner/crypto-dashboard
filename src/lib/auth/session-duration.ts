@@ -8,7 +8,7 @@ import {
   DEFAULT_SESSION_DURATION,
   SESSION_DURATION_HEADER,
   sessionDurationSeconds,
-} from "./policy";
+} from "./policy.js";
 
 const startsLogin = (path = "") =>
   [

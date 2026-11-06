@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { validateCreatorProfile } from "./creator-profile";
-import type { Sql } from "./db";
+import { validateCreatorProfile } from "./creator-profile.js";
+import type { Sql } from "./db.js";
 import {
   DEFAULT_CONTACT_SETTINGS,
   validateContactSettings,
@@ -14,7 +14,7 @@ import {
   type ContactPaymentStatus,
   type InboxFolder,
   type InboxUnreadCounts,
-} from "./creator-contact";
+} from "./creator-contact.js";
 
 export type StoredContactMessage = {
   id: string;

@@ -1,4 +1,4 @@
-import { validateCreatorProfile, type CreatorProfile } from "./creator-profile";
+import { validateCreatorProfile, type CreatorProfile } from "./creator-profile.js";
 
 export const MAX_PROFILE_BODY_BYTES = 128 * 1024;
 

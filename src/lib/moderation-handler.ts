@@ -1,6 +1,6 @@
-import type { ContactSession } from "./contact-handler";
-import { REPORT_REASONS, type ReportReason, type ReportStatus } from "./moderation";
-import type { ModerationStore } from "./moderation-store";
+import type { ContactSession } from "./contact-handler.js";
+import { REPORT_REASONS, type ReportReason, type ReportStatus } from "./moderation.js";
+import type { ModerationStore } from "./moderation-store.js";
 
 export interface ModerationHandlerDependencies {
   configured: boolean;

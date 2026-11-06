@@ -283,7 +283,12 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const setupHelp = setupRequest && !challenge && (user || ordinarySignIn) && (
     <AccountSetupStatus
       configuration={configuration}
+      availability={configurationStatus}
       request={setupRequest}
+      onRetry={() => {
+        setError("");
+        reloadConfiguration();
+      }}
       onClose={() => {
         const provider = setupRequest.provider;
         setSetupRequest(null);
@@ -301,7 +306,8 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           availability={configurationStatus}
           accounts={accounts}
           linking={linking}
-          busy={busy || isPending}
+          busy={busy}
+          authPending={isPending}
           selectedProvider={setupRequest?.provider ?? null}
           onConnect={connect}
           onSetup={(provider) =>
@@ -388,7 +394,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           {error || configurationError}
         </p>
       )}
-      {configurationStatus === "unavailable" && (
+      {configurationStatus === "unavailable" && !setupHelp && (
         <button
           className="account-text-button"
           aria-label="Retry sign-in options"

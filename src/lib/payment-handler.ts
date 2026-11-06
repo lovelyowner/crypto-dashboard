@@ -1,32 +1,32 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import type { ContactStore } from "./contact-store";
-import { contactAmountUnits, exactContactAmount, validateContactText } from "./creator-contact";
-import { normalizePublicHandle } from "./public-profile";
-import { getPublicProfilePath } from "./profile-url";
-import type { ProfileSession } from "./profile-handler";
-import { isFreshAccountSession } from "./auth/policy";
+import type { ContactStore } from "./contact-store.js";
+import { contactAmountUnits, exactContactAmount, validateContactText } from "./creator-contact.js";
+import { normalizePublicHandle } from "./public-profile.js";
+import { getPublicProfilePath } from "./profile-url.js";
+import type { ProfileSession } from "./profile-handler.js";
+import { isFreshAccountSession } from "./auth/policy.js";
 import {
   decryptPaymentCredentials,
   encryptPaymentCredentials,
   validatePaymentCredentials,
-} from "./payment-credentials";
+} from "./payment-credentials.js";
 import {
   verifyNowPaymentsPayment,
   verifyNowPaymentsSignature,
   NowPaymentsUnavailableError,
   type createNowPaymentsClient,
-} from "./nowpayments";
+} from "./nowpayments.js";
 import {
   EthereumPaymentUnavailableError,
   type createEthereumPaymentVerifier,
-} from "./ethereum-payment";
+} from "./ethereum-payment.js";
 import {
   PaymentProofConflictError,
   type PaymentStore,
   type StoredPaymentIntent,
-} from "./payment-store";
-import type { PaymentView, PaymentConfiguration } from "./payment-types";
-import { isContactBlockedError } from "./moderation";
+} from "./payment-store.js";
+import type { PaymentView, PaymentConfiguration } from "./payment-types.js";
+import { isContactBlockedError } from "./moderation.js";
 
 type Session = ProfileSession & {
   user: { id: string; name?: string };

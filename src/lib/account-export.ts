@@ -1,5 +1,5 @@
-import { validateCreatorProfile } from "./creator-profile";
-import { isFreshAccountSession } from "./auth/policy";
+import { validateCreatorProfile } from "./creator-profile.js";
+import { isFreshAccountSession } from "./auth/policy.js";
 
 type Session = {
   user: {

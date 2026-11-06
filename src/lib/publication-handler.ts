@@ -1,6 +1,6 @@
-import type { CreatorProfile } from "./creator-profile";
-import { isReservedRootHandle } from "./profile-url";
-import type { ProfileSession } from "./profile-handler";
+import type { CreatorProfile } from "./creator-profile.js";
+import { isReservedRootHandle } from "./profile-url.js";
+import type { ProfileSession } from "./profile-handler.js";
 import {
   PublicationConflictError,
   normalizePublicHandle,
@@ -8,7 +8,7 @@ import {
   validatePublicCreatorProfile,
   validatePublishableProfile,
   type ProfilePublication,
-} from "./public-profile";
+} from "./public-profile.js";
 
 export interface StoredPublication {
   handle: string;

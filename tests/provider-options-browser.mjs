@@ -51,6 +51,12 @@ async function releaseConfiguration(value) {
   await Promise.all(pending.map(([, completed]) => completed));
 }
 let session = null;
+let holdSession = false;
+const pendingSessions = new Set();
+async function releaseSessions() {
+  for (const resolve of pendingSessions) resolve();
+  pendingSessions.clear();
+}
 let accounts = [];
 const now = new Date().toISOString();
 const expiry = new Date(Date.now() + 86_400_000).toISOString();
@@ -123,7 +129,10 @@ await context.route("**/*", async (route) => {
     }
     return json(route, configuration);
   }
-  if (path === "get-session") return json(route, session);
+  if (path === "get-session") {
+    if (holdSession) await new Promise((resolve) => pendingSessions.add(resolve));
+    return json(route, session);
+  }
   if (path === "list-accounts") return json(route, accounts);
   if (path === "list-sessions") return json(route, session ? [session.session] : []);
   if (path === "passkey/list-user-passkeys") return json(route, []);
@@ -154,8 +163,14 @@ async function readyConfiguration() {
   await page.locator(".account-provider-options[data-availability='ready']").waitFor();
 }
 async function openLogin(path = "/login", waitForReady = true) {
+  // Initial SSR markup can be visible before React attaches its handlers.
+  // The client settings request starts from an effect after hydration.
+  const settingsRequested = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === "/api/auth/config",
+  );
   await page.goto(new URL(path, origin).href, { waitUntil: "domcontentloaded" });
   await page.locator(".account-panel").waitFor();
+  await settingsRequested;
   if (waitForReady) await readyConfiguration();
 }
 async function assertNoProviderActions() {
@@ -168,20 +183,34 @@ async function assertNoProviderActions() {
     );
 }
 async function assertPendingChoices() {
-  assert.equal(await page.locator(".account-provider[data-provider-action='pending']").count(), 5);
-  assert.equal(await page.locator(".account-provider:disabled").count(), 5);
+  const requestsBefore = providerRequests.length;
+  assert.equal(await page.locator(".account-provider[data-provider-action='check']").count(), 5);
+  assert.equal(await page.locator(".account-provider:disabled").count(), 0);
   assert.equal(await page.locator(".account-provider[data-provider-action='oauth']").count(), 0);
   assert.equal(await page.locator(".account-provider[data-provider-action='setup']").count(), 0);
   assert.deepEqual(
     await page
       .locator(".account-provider")
       .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))),
-    supported.map(([, label]) => `${label} sign-in`),
+    supported.map(([, label]) => `${label} sign-in status`),
   );
   for (const [, label] of supported) {
-    const button = page.getByRole("button", { name: `${label} sign-in`, exact: true });
+    const button = page.getByRole("button", { name: `${label} sign-in status`, exact: true });
     assert.equal(await button.isVisible(), true);
-    await button.dispatchEvent("click");
+    assert.equal(await button.isEnabled(), true);
+    assert.equal(await button.locator("small").innerText(), "Check status");
+    await button.click();
+    const details = page.locator(".account-setup-details");
+    assert.equal(await details.getAttribute("open"), "");
+    const feedback = details.locator(".account-setup-availability");
+    assert.ok((await feedback.innerText()).includes(label));
+    assert.match(await feedback.innerText(), /still being checked|could not be checked/);
+    assert.equal(await details.getByText("Unknown", { exact: true }).count(), 4);
+    assert.equal(await details.getByText("Needs setup", { exact: true }).count(), 0);
+    assert.equal(await button.getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator(".account-provider[aria-pressed='true']").count(), 1);
+    assert.equal(await button.evaluate((element) => element === document.activeElement), true);
+    assert.equal(providerRequests.length, requestsBefore, "Checking status never invokes OAuth");
   }
   await assertMoreServicesCollapsed();
 }
@@ -319,7 +348,7 @@ try {
   await openLogin("/login", false);
   await loadingOptions().waitFor();
   await check(
-    "a pending availability check keeps five disabled choices above one compact status",
+    "a pending availability check keeps five clickable status choices without starting OAuth",
     async () => {
       const requestsBefore = providerRequests.length;
       assert.equal(await loadingOptions().count(), 1);
@@ -327,8 +356,8 @@ try {
       assert.equal(providerRequests.length, requestsBefore);
       await assertMinimalSignIn();
       await assertFeedbackBelowChoices(loadingOptions());
-      assert.equal(await page.locator(".account-setup-details").count(), 0);
-      assert.equal(await page.locator(".account-service-statuses li").count(), 0);
+      assert.equal(await page.locator(".account-setup-details").count(), 1);
+      assert.equal(await page.locator(".account-service-statuses li").count(), 4);
     },
   );
   configurationMode = "ready";
@@ -500,7 +529,7 @@ try {
     await openLogin("/login", false);
     await failedOptions().waitFor();
     await check(
-      `${description} retain disabled choices and offer a compact retry below them`,
+      `${description} keep clickable service status and offer retry without guessing setup`,
       async () => {
         const requestsBefore = providerRequests.length;
         assert.equal(await failedOptions().count(), 1);
@@ -528,12 +557,38 @@ try {
     );
   }
 
+  await check(
+    "unknown status checklist distinguishes a failed request from missing credentials",
+    async () => {
+      const details = page.locator(".account-setup-details");
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            writeText: async (text) => {
+              window.unknownChecklist = text;
+            },
+          },
+        });
+      });
+      await details.getByRole("button", { name: "Copy setup checklist", exact: true }).click();
+      await details.getByRole("status").filter({ hasText: "Setup checklist copied" }).waitFor();
+      const report = await page.evaluate(() => window.unknownChecklist);
+      assert.match(report, /Unknown environment/);
+      assert.match(report, /Configuration request: Unavailable/);
+      assert.match(report, /DATABASE_URL \/ PREVIEW_DATABASE_URL: Unknown/);
+      assert.match(report, /GOOGLE_CLIENT_ID \/ GOOGLE_CLIENT_SECRET: Unknown/);
+      assert.doesNotMatch(report, /: needed|: not enabled|: configured/);
+      assert.equal(await details.getByText("Needs setup", { exact: true }).count(), 0);
+    },
+  );
+
   configuration = { ...configuration, providers: allProviders };
   configurationMode = "pending";
   await page.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
   await loadingOptions().waitFor();
   await check(
-    "retry clears failure and keeps actions unavailable until a valid response arrives",
+    "explicit retry keeps service status selectable and starts no OAuth after settings recover",
     async () => {
       assert.equal(await failedOptions().count(), 0);
       assert.equal(await loadingOptions().count(), 1);
@@ -544,6 +599,7 @@ try {
       await releaseConfiguration(configuration);
       await readyConfiguration();
       assert.equal(await page.locator(".account-provider").count(), 5);
+      assert.equal(providerRequests.length, requestsBefore, "Retry never queues automatic OAuth");
       assert.equal(await loadingOptions().count(), 0);
       assert.equal(await failedOptions().count(), 0);
     },
@@ -565,6 +621,37 @@ try {
       await page.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
       await readyConfiguration();
       assert.equal(await page.locator(".account-provider").count(), 5);
+    },
+  );
+
+  holdSession = true;
+  await openLogin("/login", false);
+  await readyConfiguration();
+  await check(
+    "session discovery blocks OAuth while explanatory choices remain available",
+    async () => {
+      const requestsBefore = providerRequests.length;
+      assert.equal(
+        await page.locator(".account-provider[data-provider-action='oauth']").count(),
+        5,
+      );
+      assert.equal(await page.locator(".account-provider:disabled").count(), 5);
+      for (const [, label] of supported) {
+        const button = page.getByRole("button", { name: `Continue with ${label}`, exact: true });
+        await button.dispatchEvent("click");
+      }
+      assert.equal(providerRequests.length, requestsBefore);
+      await page.getByText("More services", { exact: true }).click();
+      const bluesky = page.getByRole("button", { name: "Bluesky availability", exact: true });
+      assert.equal(await bluesky.isEnabled(), true);
+      await bluesky.click();
+      await page.locator("[data-provider-info='bluesky']").waitFor();
+      assert.equal(providerRequests.length, requestsBefore);
+      holdSession = false;
+      await releaseSessions();
+      await page.waitForFunction(() => !document.querySelector(".account-provider:disabled"));
+      const request = await initiate("google", "Google");
+      assert.equal(request.body.provider, "google");
     },
   );
 
@@ -945,6 +1032,8 @@ try {
     `Provider options browser: ${checks} checks passed (mocked auth availability and SDK requests; no live OAuth claimed).`,
   );
 } finally {
+  holdSession = false;
+  await releaseSessions();
   await releaseConfiguration(configuration);
   await context.close();
   await browser.close();

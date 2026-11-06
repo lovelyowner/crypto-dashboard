@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto";
-import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server";
-import { getSql } from "./db";
-import { createContactHandler } from "./contact-handler";
-import { createSqlContactStore, type ContactStore } from "./contact-store";
-import { handleModerationRequest } from "./moderation.server";
+import { auth, authConfigured, authIsProduction, authOrigin } from "./auth/server.js";
+import { getSql } from "./db.js";
+import { createContactHandler } from "./contact-handler.js";
+import { createSqlContactStore, type ContactStore } from "./contact-store.js";
+import { handleModerationRequest } from "./moderation.server.js";
 
 const origin = authOrigin;
 // The proxy delays SQL acquisition until an actual configured request needs it.
@@ -26,7 +26,7 @@ const handleContact = createContactHandler({
   getSession: (headers) => auth.api.getSession({ headers, query: { disableCookieCache: true } }),
   store,
   getPaymentAvailability: async (userId) => {
-    const { getCreatorPaymentAvailability } = await import("./payments.server");
+    const { getCreatorPaymentAvailability } = await import("./payments.server.js");
     return getCreatorPaymentAvailability(userId);
   },
   requestKey: async (request) => {

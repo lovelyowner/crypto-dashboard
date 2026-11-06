@@ -1,4 +1,4 @@
-import { isChainId, isValidAddress, normalizeAddress, type ChainId } from "./chains";
+import { isChainId, isValidAddress, normalizeAddress, type ChainId } from "./chains.js";
 
 export type ProfileLink = { id: string; label: string; url: string };
 export type WishlistItem = {

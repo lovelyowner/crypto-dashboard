@@ -1,5 +1,5 @@
 /** Exercise the Vercel browser build and its actual plain-Node API entry.
- * Run after npm run build:vercel: node --import tsx tests/hosted-browser.mjs
+ * Run after npm run build:vercel: npm run test:hosted
  * Production secrets are removed from the child process; no database is touched.
  */
 import assert from "node:assert/strict";
@@ -7,16 +7,26 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { once } from "node:events";
 import { chromium } from "playwright";
-import { ROOT_PROFILE_ROUTE_SOURCE, publicHandleFromPath } from "../src/lib/profile-url.ts";
+import { compileApiRuntime } from "../scripts/api-runtime.mjs";
 
 const filename = fileURLToPath(import.meta.url);
 const project = resolve(dirname(filename), "..");
+const serving = process.argv.includes("--serve");
+const apiRuntime = serving
+  ? {
+      directory: process.argv[3],
+      entryURL: pathToFileURL(resolve(process.argv[3], "api/[...path].js")),
+    }
+  : await compileApiRuntime();
+const { ROOT_PROFILE_ROUTE_SOURCE, publicHandleFromPath } = await import(
+  pathToFileURL(resolve(apiRuntime.directory, "src/lib/profile-url.js")).href
+);
 
 async function serveHostedBuild() {
-  const { default: handleApi } = await import("../api/[...path].ts");
+  const { default: handleApi } = await import(apiRuntime.entryURL);
   const directory = resolve(project, "site");
   const contentTypes = {
     ".html": "text/html; charset=utf-8",
@@ -81,9 +91,13 @@ async function startHostedServer() {
     "DISCORD_CLIENT_SECRET",
     "TWITTER_CLIENT_ID",
     "TWITTER_CLIENT_SECRET",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
+    "TWITCH_CLIENT_ID",
+    "TWITCH_CLIENT_SECRET",
   ])
     delete env[name];
-  const child = spawn(process.execPath, ["--import", "tsx", filename, "--serve"], {
+  const child = spawn(process.execPath, [filename, "--serve", apiRuntime.directory], {
     cwd: project,
     env,
     stdio: ["ignore", "pipe", "pipe"],
@@ -474,5 +488,11 @@ async function runChecks() {
   }
 }
 
-if (process.argv.includes("--serve")) await serveHostedBuild();
-else await runChecks();
+if (serving) await serveHostedBuild();
+else {
+  try {
+    await runChecks();
+  } finally {
+    await apiRuntime.cleanup();
+  }
+}
