@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PublicAuthConfiguration } from "@/lib/auth/public-configuration";
-import {
-  SOCIAL_PROVIDERS,
-  socialProviderLabel,
-  type SupportedSocialProviderId,
-} from "@/lib/auth/providers";
+import { socialProviderLabel, type SupportedSocialProviderId } from "@/lib/auth/providers";
 
 export function AccountSetupStatus({
   configuration,
@@ -15,7 +11,7 @@ export function AccountSetupStatus({
 }: {
   configuration: PublicAuthConfiguration | null;
   availability: "loading" | "ready" | "unavailable";
-  request?: { provider: SupportedSocialProviderId; version: number } | null;
+  request?: { provider: SupportedSocialProviderId | null; version: number } | null;
   onRetry: () => void;
   onClose?: () => void;
 }) {
@@ -25,15 +21,7 @@ export function AccountSetupStatus({
     if (!request || !details.current) return;
     details.current.open = true;
   }, [request]);
-  if (
-    (!configuration && !request) ||
-    (configuration && !configuration.setup) ||
-    (configuration?.configured &&
-      SOCIAL_PROVIDERS.filter((provider) => provider.supported).every(
-        (provider) => configuration.providers[provider.providerId] === true,
-      ))
-  )
-    return null;
+  if (!request) return null;
   const setup = configuration?.setup;
   const prefix = setup?.environment === "preview" ? "PREVIEW_" : "";
   const settingName = (name: string) => (setup ? `${prefix}${name}` : `${name} / PREVIEW_${name}`);
@@ -64,7 +52,7 @@ export function AccountSetupStatus({
       <summary>Website sign-in setup</summary>
       {!configuration && request && (
         <p className="account-help account-setup-availability" role="status">
-          {socialProviderLabel(request.provider)} sign-in availability{" "}
+          {request.provider ? socialProviderLabel(request.provider) : "Social"} sign-in availability{" "}
           {availability === "loading"
             ? "is still being checked."
             : "could not be checked. Retry to load this website’s sign-in settings."}
@@ -88,7 +76,7 @@ export function AccountSetupStatus({
             <span>{ready === undefined ? "Unknown" : ready ? "Configured" : "Needs setup"}</span>
           </li>
         ))}
-        {request && (
+        {request.provider && (
           <li>
             <span className="account-service-name">
               {socialProviderLabel(request.provider)} sign-in
@@ -103,7 +91,7 @@ export function AccountSetupStatus({
           </li>
         )}
       </ul>
-      {request && configuration && (
+      {request.provider && configuration && (
         <p className="account-help">
           {socialProviderLabel(request.provider)} needs its registered application ID, client
           secret, and exact website callback URL configured by the website owner.

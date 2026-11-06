@@ -13,6 +13,7 @@ export async function handleAuthRequest(request: Request) {
   if (!authConfigured)
     return Response.json(
       {
+        code: "ACCOUNT_SETUP_REQUIRED",
         message:
           "Authentication requires BETTER_AUTH_SECRET, BETTER_AUTH_URL (HTTPS), and DATABASE_URL in production.",
       },

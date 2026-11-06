@@ -287,24 +287,20 @@ async function runChecks() {
       );
     });
     await check(
-      "hosted social choices open setup help without attempting unconfigured OAuth",
+      "hosted social actions call the real API and explain missing account setup without fake redirects",
       async () => {
         await dialog.locator(".account-provider-options[data-availability='ready']").waitFor();
         assert.equal(
-          await dialog.locator(".account-provider[data-provider-action='setup']").count(),
-          5,
-        );
-        assert.equal(
           await dialog.locator(".account-provider[data-provider-action='oauth']").count(),
-          0,
+          5,
         );
         assert.equal(await dialog.locator(".account-provider:disabled").count(), 0);
         assert.equal(await dialog.locator(".account-setup-details").count(), 0);
         assert.equal(
           await dialog.evaluate((root) => {
-            const form = root.querySelector(".account-form");
-            const links = root.querySelector(".account-form-links");
-            const choices = root.querySelector(".account-provider-options");
+            const form = root.querySelector(".account-form"),
+              links = root.querySelector(".account-form-links"),
+              choices = root.querySelector(".account-provider-options");
             return Boolean(
               form &&
               links &&
@@ -316,49 +312,40 @@ async function runChecks() {
           true,
           "Hosted social choices follow the credential form and account switches",
         );
-        assert.equal(
-          await dialog.evaluate((root) => {
-            const grid = root.querySelector(".account-providers");
-            const alert = root.querySelector('[role="alert"]');
-            return Boolean(
-              grid &&
-              alert &&
-              grid.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING,
-            );
-          }),
-          true,
-          "Hosted account setup feedback follows the social buttons",
-        );
-        assert.equal(await dialog.getByText("Sign-in services", { exact: true }).count(), 0);
-        assert.equal(
-          await dialog.locator(".account-provider-options .account-service-statuses").count(),
-          0,
-        );
         assert.equal(await dialog.locator(".account-provider-info").count(), 5);
         for (const button of await dialog.locator(".account-provider-info").all())
           assert.equal(await button.isVisible(), false);
         await dialog.getByLabel("Email address", { exact: true }).fill("preserved@example.com");
         await dialog.getByLabel("Password", { exact: true }).fill("preserved password");
-        const details = dialog.locator(".account-setup-details");
-        for (const label of ["Google", "Discord", "Google"]) {
-          const button = dialog.getByRole("button", {
-            name: `${label} sign-in setup`,
-            exact: true,
-          });
-          await button.click();
-          assert.equal(await details.getAttribute("open"), "");
-          assert.ok(
-            (await details.locator(".account-service-statuses li").last().innerText()).includes(
-              label,
-            ),
+        for (const [provider, label] of [
+          ["google", "Google"],
+          ["discord", "Discord"],
+          ["twitter", "Twitter / X"],
+          ["github", "GitHub"],
+          ["twitch", "Twitch"],
+        ]) {
+          const response = page.waitForResponse(
+            (response) =>
+              new URL(response.url()).pathname === "/api/auth/sign-in/social" &&
+              response.request().postDataJSON()?.provider === provider,
           );
-          assert.equal(await button.getAttribute("aria-pressed"), "true");
-          assert.equal(
-            await button.evaluate((element) => element === document.activeElement),
-            true,
+          await dialog.getByRole("button", { name: `Continue with ${label}`, exact: true }).click();
+          assert.equal((await response).status(), 503);
+          await dialog.locator(".account-error[role='alert']").waitFor();
+          assert.match(
+            await dialog.locator(".account-error[role='alert']").innerText(),
+            /account.*setup|website.*setup|not.*configured|authentication.*requires/i,
           );
+          assert.equal(page.url(), `${baseURL}/`);
+          assert.equal(await dialog.locator(".account-setup-details").count(), 0);
         }
-        assert.match(await details.innerText(), /website owner/i);
+        assert.equal(providerRequests.length, 5);
+        const help = dialog.getByRole("button", { name: "Website sign-in setup", exact: true });
+        await help.click();
+        const details = dialog.locator(".account-setup-details");
+        assert.equal(await help.getAttribute("aria-expanded"), "true");
+        assert.equal(await details.getAttribute("open"), "");
+        assert.equal(await details.locator(".account-service-statuses li").count(), 3);
         await dialog.getByText("More services", { exact: true }).click();
         for (const [id, label] of [
           ["bluesky", "Bluesky"],
@@ -375,6 +362,7 @@ async function runChecks() {
           assert.equal(await button.getAttribute("aria-pressed"), "true");
           assert.equal(await dialog.locator(".account-setup-details").count(), 0);
         }
+        assert.equal(providerRequests.length, 5, "Informational choices never call authentication");
         assert.equal(
           await dialog.getByLabel("Email address", { exact: true }).inputValue(),
           "preserved@example.com",
@@ -383,7 +371,6 @@ async function runChecks() {
           await dialog.getByLabel("Password", { exact: true }).inputValue(),
           "preserved password",
         );
-        assert.deepEqual(providerRequests, []);
         assert.equal(
           await dialog.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),
           0,
@@ -395,7 +382,7 @@ async function runChecks() {
         await page.goto(`${baseURL}${path}`, { waitUntil: "networkidle" });
         await page
           .getByRole("dialog")
-          .getByRole("button", { name: "Google sign-in setup", exact: true })
+          .getByRole("button", { name: "Continue with Google", exact: true })
           .waitFor();
         assert.equal(
           await page

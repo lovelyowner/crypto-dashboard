@@ -31,6 +31,7 @@ import { useAuthConfiguration } from "@/lib/auth/use-configuration";
 import { socialReturnError, socialReturnPath } from "@/lib/auth/social-return";
 import { AccountSetupStatus } from "./account-setup";
 import { AccountDataExport } from "./account-data-export";
+import { socialAuthError } from "@/lib/auth/social-error";
 import "./account.css";
 
 type LinkedAccount = { id: string; providerId: string; accountId: string };
@@ -87,7 +88,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [setupRequest, setSetupRequest] = useState<{
-    provider: SupportedSocialProviderId;
+    provider: SupportedSocialProviderId | null;
     version: number;
   } | null>(null);
   const [currentOrigin, setCurrentOrigin] = useState("");
@@ -242,8 +243,6 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
 
   const connect = (provider: SupportedSocialProviderId, linking: boolean) =>
     void run(async () => {
-      if (!configuration?.configured || configuration.providers[provider] !== true)
-        throw new Error(`${socialProviderLabel(provider)} sign-in needs website-owner setup.`);
       if (
         configuration?.signInOrigin &&
         currentOrigin &&
@@ -267,8 +266,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               },
             },
           });
-      if (result.error)
-        throw new Error(result.error.message || "Could not start provider sign-in.");
+      if (result.error) throw new Error(socialAuthError(provider, result.error));
       if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) {
         setMode("login");
         setChallenge(true);
@@ -290,10 +288,9 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         reloadConfiguration();
       }}
       onClose={() => {
-        const provider = setupRequest.provider;
         setSetupRequest(null);
         document
-          .querySelector<HTMLButtonElement>(`.account-provider[data-provider-id="${provider}"]`)
+          .querySelector<HTMLButtonElement>(".account-signin-help")
           ?.focus({ preventScroll: true });
       }}
     />
@@ -302,17 +299,14 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     otherSignInOrigin ? null : (
       <>
         <AccountProviders
-          configuration={configuration}
           availability={configurationStatus}
           accounts={accounts}
           linking={linking}
           busy={busy}
           authPending={isPending}
-          selectedProvider={setupRequest?.provider ?? null}
+          helpOpen={Boolean(setupRequest)}
           onConnect={connect}
-          onSetup={(provider) =>
-            setSetupRequest((value) => ({ provider, version: (value?.version ?? 0) + 1 }))
-          }
+          onHelp={() => setSetupRequest((value) => (value ? null : { provider: null, version: 1 }))}
           onDismissSetup={() => setSetupRequest(null)}
         />
         {setupHelp}
