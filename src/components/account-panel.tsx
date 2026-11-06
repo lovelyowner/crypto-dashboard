@@ -279,24 +279,42 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
     configuration?.signInOrigin && currentOrigin && configuration.signInOrigin !== currentOrigin
       ? configuration.signInOrigin
       : null;
+  const ordinarySignIn = !user && !challenge && (mode === "login" || mode === "signup");
+  const setupHelp = setupRequest && !challenge && (user || ordinarySignIn) && (
+    <AccountSetupStatus
+      configuration={configuration}
+      request={setupRequest}
+      onClose={() => {
+        const provider = setupRequest.provider;
+        setSetupRequest(null);
+        document
+          .querySelector<HTMLButtonElement>(`.account-provider[data-provider-id="${provider}"]`)
+          ?.focus({ preventScroll: true });
+      }}
+    />
+  );
   const providerButtons = (linking: boolean) =>
     otherSignInOrigin ? null : (
-      <AccountProviders
-        configuration={configuration}
-        availability={configurationStatus}
-        accounts={accounts}
-        linking={linking}
-        busy={busy || isPending}
-        onConnect={connect}
-        onSetup={(provider) =>
-          setSetupRequest((value) => ({ provider, version: (value?.version ?? 0) + 1 }))
-        }
-      />
+      <>
+        <AccountProviders
+          configuration={configuration}
+          availability={configurationStatus}
+          accounts={accounts}
+          linking={linking}
+          busy={busy || isPending}
+          selectedProvider={setupRequest?.provider ?? null}
+          onConnect={connect}
+          onSetup={(provider) =>
+            setSetupRequest((value) => ({ provider, version: (value?.version ?? 0) + 1 }))
+          }
+          onDismissSetup={() => setSetupRequest(null)}
+        />
+        {setupHelp}
+      </>
     );
 
-  const signInChoices = !user && !challenge && (mode === "login" || mode === "signup") && (
+  const signInChoices = ordinarySignIn && (
     <>
-      {providerButtons(false)}
       {mode === "login" &&
         configuration?.configured &&
         configuration.passkeys &&
@@ -359,42 +377,12 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             )}
           </>
         )}
+      {providerButtons(false)}
     </>
   );
 
-  return (
-    <section className="account-panel">
-      {user || challenge || mode === "recover" || mode === "reset" ? (
-        <>
-          <div className="account-heading">
-            <div className="account-icon">
-              <ShieldCheck size={23} />
-            </div>
-            <div>
-              <p className="account-eyebrow">YOUR ACCOUNT</p>
-              <h2>
-                {user
-                  ? "Account & security"
-                  : challenge
-                    ? "Verify it’s you"
-                    : mode === "signup"
-                      ? "Create your account"
-                      : mode === "recover" || mode === "reset"
-                        ? "Recover access"
-                        : "Welcome back"}
-              </h2>
-            </div>
-          </div>
-          {user && (
-            <p className="account-intro">
-              Keep independent ways to sign in, so losing a social account doesn’t lock you out.
-            </p>
-          )}
-        </>
-      ) : (
-        <h2 className="sr-only">{mode === "signup" ? "Create account" : "Sign in"}</h2>
-      )}
-      {signInChoices}
+  const accountFeedback = (
+    <>
       {(error || configurationError) && (
         <p className={error ? "account-message account-error" : "account-help"} role="alert">
           {error || configurationError}
@@ -431,14 +419,47 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           original website address.
         </p>
       )}
-      {setupRequest && !challenge && (user || mode === "login" || mode === "signup") && (
-        <AccountSetupStatus configuration={configuration} request={setupRequest} />
-      )}
       {notice && (
         <p className="account-message account-success" role="status">
           {notice}
         </p>
       )}
+    </>
+  );
+
+  return (
+    <section className="account-panel">
+      {user || challenge || mode === "recover" || mode === "reset" ? (
+        <>
+          <div className="account-heading">
+            <div className="account-icon">
+              <ShieldCheck size={23} />
+            </div>
+            <div>
+              <p className="account-eyebrow">YOUR ACCOUNT</p>
+              <h2>
+                {user
+                  ? "Account & security"
+                  : challenge
+                    ? "Verify it’s you"
+                    : mode === "signup"
+                      ? "Create your account"
+                      : mode === "recover" || mode === "reset"
+                        ? "Recover access"
+                        : "Welcome back"}
+              </h2>
+            </div>
+          </div>
+          {user && (
+            <p className="account-intro">
+              Keep independent ways to sign in, so losing a social account doesn’t lock you out.
+            </p>
+          )}
+        </>
+      ) : (
+        <h2 className="sr-only">{mode === "signup" ? "Create account" : "Sign in"}</h2>
+      )}
+      {!ordinarySignIn && accountFeedback}
       {isPending ? (
         <p className="account-muted">
           <LoaderCircle className="account-spin" size={16} /> Loading account…
@@ -923,6 +944,12 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           <AccountSessions key={session.session.id} currentSessionId={session.session.id} />
           <AccountDataExport key={`export:${user.id}`} />
         </>
+      )}
+      {ordinarySignIn && (
+        <div className="account-signin-options">
+          {signInChoices}
+          {accountFeedback}
+        </div>
       )}
       {user && (
         <p className="account-footnote">

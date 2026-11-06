@@ -9,17 +9,17 @@ import {
 export function AccountSetupStatus({
   configuration,
   request,
+  onClose,
 }: {
   configuration: PublicAuthConfiguration | null;
   request?: { provider: SupportedSocialProviderId; version: number } | null;
+  onClose?: () => void;
 }) {
   const [notice, setNotice] = useState("");
   const details = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     if (!request || !details.current) return;
     details.current.open = true;
-    details.current.querySelector("summary")?.focus({ preventScroll: true });
-    details.current.scrollIntoView({ block: "nearest" });
   }, [request]);
   if (
     !configuration?.setup ||
@@ -102,6 +102,11 @@ export function AccountSetupStatus({
         <p className="account-help" role="status">
           {notice}
         </p>
+      )}
+      {onClose && (
+        <button type="button" className="account-text-button" onClick={onClose}>
+          Close setup help
+        </button>
       )}
     </details>
   );

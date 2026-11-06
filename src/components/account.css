@@ -188,6 +188,12 @@
 .account-providers:empty {
   display: none;
 }
+.account-signin-options {
+  margin-top: 24px;
+}
+.account-provider-information {
+  margin-top: 12px;
+}
 .account-provider-note {
   color: #999;
   font-size: 11px;
@@ -236,7 +242,8 @@
   width: 100%;
   margin-bottom: 12px;
 }
-.account-provider {
+.account-provider,
+.account-provider-info {
   border: 1px solid var(--ui-border);
   background: var(--ui-background);
   border-radius: 10px;
@@ -255,11 +262,23 @@
   text-align: center;
   color: var(--ui-icon);
 }
-.account-provider small {
+.account-provider small,
+.account-provider-info small {
   display: block;
   color: var(--ui-text-1);
   font-size: 10px;
   margin-top: 3px;
+}
+.account-provider[aria-pressed="true"],
+.account-provider-info[aria-pressed="true"] {
+  outline: 1px solid var(--ui-border);
+  outline-offset: 2px;
+  color: var(--ui-text-3);
+}
+.account-provider:focus-visible,
+.account-provider-info:focus-visible {
+  outline: 2px solid var(--ui-border);
+  outline-offset: 3px;
 }
 .account-message {
   padding: 12px 14px;

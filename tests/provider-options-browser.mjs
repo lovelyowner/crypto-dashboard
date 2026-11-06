@@ -12,6 +12,13 @@ const supported = [
   ["twitch", "Twitch"],
 ];
 const unsupported = ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"];
+const planned = [
+  ["bluesky", "Bluesky", /AT Protocol|DPoP|DID/i],
+  ["fluxer", "Fluxer", /application|OAuth|verif/i],
+  ["stoat", "Stoat", /account control|OAuth|integrat/i],
+  ["hey", "hey.xyz", /Lens|wallet/i],
+  ["mastodon", "Mastodon", /server|instance/i],
+];
 const allProviders = Object.fromEntries(supported.map(([id]) => [id, true]));
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -155,7 +162,10 @@ async function assertNoProviderActions() {
   assert.equal(await page.locator(".account-provider").count(), 0);
   assert.equal(await page.getByText("Checking availability…", { exact: true }).count(), 0);
   for (const name of unsupported)
-    assert.equal(await page.getByText(name, { exact: true }).count(), 0);
+    assert.equal(
+      await page.getByRole("button", { name: `${name} availability`, exact: true }).count(),
+      0,
+    );
 }
 async function assertPendingChoices() {
   assert.equal(await page.locator(".account-provider[data-provider-action='pending']").count(), 5);
@@ -173,19 +183,30 @@ async function assertPendingChoices() {
     assert.equal(await button.isVisible(), true);
     await button.dispatchEvent("click");
   }
-  for (const name of unsupported)
-    assert.equal(await page.getByText(name, { exact: true }).count(), 0);
+  await assertMoreServicesCollapsed();
 }
-async function assertChoicesBeforeCredentials() {
+async function assertMoreServicesCollapsed() {
+  assert.equal(await page.locator(".account-provider-info").count(), 5);
+  for (const [, label] of planned) {
+    const button = page.locator(".account-provider-info").filter({ hasText: label });
+    assert.equal(await button.isVisible(), false);
+    assert.equal((await button.locator("small").textContent())?.trim(), "Integration needed");
+  }
+}
+async function assertChoicesAfterCredentials() {
   assert.equal(
     await page.locator(".account-provider-options").evaluate((choices) => {
       const form = document.querySelector(".account-form");
+      const links = document.querySelector(".account-form-links");
       return Boolean(
-        form && choices.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING,
+        form &&
+        links &&
+        form.compareDocumentPosition(links) & Node.DOCUMENT_POSITION_FOLLOWING &&
+        links.compareDocumentPosition(choices) & Node.DOCUMENT_POSITION_FOLLOWING,
       );
     }),
     true,
-    "Social sign-in choices appear before the credential form",
+    "Social sign-in choices follow the credential form and account switches",
   );
 }
 async function assertMinimalSignIn() {
@@ -217,22 +238,22 @@ async function assertMinimalSignIn() {
     await panel.innerText(),
     /selected server deadline|server ends this session|browser-session cookie|NFKC normalization|NFC normalization|12–256 characters/i,
   );
-  await assertChoicesBeforeCredentials();
+  await assertChoicesAfterCredentials();
   assert.equal(
     await panel.evaluate((root) => {
-      const grid = root.querySelector(".account-providers");
-      if (!grid) return false;
+      const form = root.querySelector(".account-form");
+      if (!form) return false;
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         if (!node.textContent.trim()) continue;
         const element = node.parentElement;
         if (!element || !element.getClientRects().length || element.closest(".sr-only")) continue;
-        return grid.contains(element);
+        return form.contains(element);
       }
       return false;
     }),
     true,
-    "Provider buttons are the first visible text in the ordinary sign-in panel",
+    "The credential form is the first visible content in the ordinary sign-in panel",
   );
 }
 async function assertFeedbackBelowChoices(feedback) {
@@ -254,11 +275,13 @@ async function setupHelp(label) {
   assert.equal(await button.getAttribute("data-provider-action"), "setup");
   assert.equal(await button.locator("small").innerText(), "Setup needed");
   await button.click();
-  await page
-    .getByRole("status")
-    .filter({ hasText: /website owner/i })
-    .waitFor();
-  await assertFeedbackBelowChoices(page.getByRole("status").filter({ hasText: /website owner/i }));
+  const feedback = page.getByRole("status").filter({ hasText: /website owner/i });
+  await feedback.waitFor();
+  assert.ok((await feedback.innerText()).includes(label));
+  assert.equal(await button.getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator(".account-provider[aria-pressed='true']").count(), 1);
+  assert.equal(await button.evaluate((element) => element === document.activeElement), true);
+  await assertFeedbackBelowChoices(feedback);
   assert.equal(providerRequests.length, requestsBefore, "Setup help never calls the OAuth SDK");
 }
 const loadingOptions = () =>
@@ -325,10 +348,82 @@ try {
       for (const [, label] of supported) await setupHelp(label);
       assert.equal(await page.getByText("Sign-in services", { exact: true }).count(), 0);
       assert.equal(await page.locator(".account-service-statuses li").count(), 0);
-      for (const label of unsupported)
-        assert.equal(await page.getByText(label, { exact: true }).count(), 0);
+      await assertMoreServicesCollapsed();
       await assertMinimalSignIn();
       assert.equal(await loadingOptions().count(), 0);
+    },
+  );
+
+  configuration = {
+    ...configuration,
+    setup: { environment: "local", database: true, secret: true, origin: true },
+  };
+  await openLogin();
+  await check(
+    "switching setup services updates the selected identity without moving focus or losing credentials",
+    async () => {
+      const email = page.getByLabel("Email address", { exact: true });
+      const password = page.getByLabel("Password", { exact: true });
+      await email.fill("preserved@example.com");
+      await password.fill("preserved password");
+      for (const label of ["Google", "Discord", "Google"]) {
+        await setupHelp(label);
+        const details = page.locator(".account-setup-details");
+        assert.equal(await details.getAttribute("open"), "");
+        assert.ok(
+          (await details.locator(".account-service-statuses li").last().innerText()).includes(
+            label,
+          ),
+        );
+        await assertFeedbackBelowChoices(details);
+        assert.equal(await email.inputValue(), "preserved@example.com");
+        assert.equal(await password.inputValue(), "preserved password");
+      }
+      await page.getByRole("button", { name: "Close setup help", exact: true }).click();
+      assert.equal(await page.locator(".account-setup-details").count(), 0);
+      assert.equal(await page.locator(".account-provider[aria-pressed='true']").count(), 0);
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Google sign-in setup", exact: true })
+          .evaluate((button) => button === document.activeElement),
+        true,
+      );
+      await setupHelp("Google");
+    },
+  );
+  await check(
+    "additional services explain their integration needs without invoking OAuth or stale setup help",
+    async () => {
+      await assertMoreServicesCollapsed();
+      await page.getByText("More services", { exact: true }).click();
+      const requestsBefore = providerRequests.length;
+      for (const [id, label, reason] of planned) {
+        const button = page.getByRole("button", { name: `${label} availability`, exact: true });
+        assert.equal(await button.isEnabled(), true);
+        assert.equal(await button.locator("small").innerText(), "Integration needed");
+        await button.click();
+        const explanation = page.locator(`[data-provider-info='${id}']`);
+        await explanation.waitFor();
+        assert.ok((await explanation.innerText()).includes(label));
+        assert.match(await explanation.innerText(), reason);
+        assert.equal(await button.getAttribute("aria-pressed"), "true");
+        assert.equal(await page.locator(".account-provider-info[aria-pressed='true']").count(), 1);
+        assert.equal(await page.locator(".account-provider[aria-pressed='true']").count(), 0);
+        assert.equal(await page.locator(".account-setup-details").count(), 0);
+        assert.equal(await button.evaluate((element) => element === document.activeElement), true);
+        assert.equal(providerRequests.length, requestsBefore);
+      }
+      await setupHelp("Discord");
+      assert.equal(await page.locator("[data-provider-info]").count(), 0);
+      assert.equal(await page.locator(".account-provider-info[aria-pressed='true']").count(), 0);
+      assert.equal(
+        await page.getByLabel("Email address", { exact: true }).inputValue(),
+        "preserved@example.com",
+      );
+      assert.equal(
+        await page.getByLabel("Password", { exact: true }).inputValue(),
+        "preserved password",
+      );
     },
   );
 
@@ -342,6 +437,9 @@ try {
       github: true,
       twitch: false,
       bluesky: true,
+      fluxer: true,
+      stoat: true,
+      hey: true,
       mastodon: true,
     },
   };
@@ -372,8 +470,24 @@ try {
       );
       await setupHelp("Discord");
       assert.equal(await page.getByText("Sign-in services", { exact: true }).count(), 0);
-      for (const label of unsupported)
-        assert.equal(await page.getByText(label, { exact: true }).count(), 0);
+      await assertMoreServicesCollapsed();
+    },
+  );
+  await check(
+    "unrecognized enabled flags cannot turn planned integrations into login actions",
+    async () => {
+      const requestsBefore = providerRequests.length;
+      await page.getByText("More services", { exact: true }).click();
+      for (const [id, label] of planned) {
+        const button = page.getByRole("button", { name: `${label} availability`, exact: true });
+        await button.click();
+        await page.locator(`[data-provider-info='${id}']`).waitFor();
+        assert.equal(await page.locator(`.account-provider[data-provider-id='${id}']`).count(), 0);
+        assert.equal(providerRequests.length, requestsBefore);
+      }
+      const request = await initiate("google", "Google");
+      assert.equal(request.body.provider, "google");
+      assert.equal(await page.locator("[data-provider-info]").count(), 0);
     },
   );
 
@@ -729,7 +843,9 @@ try {
       const details = page.locator(".account-setup-details");
       assert.equal(await details.getAttribute("open"), "");
       assert.equal(
-        await details.locator("summary").evaluate((summary) => summary === document.activeElement),
+        await page
+          .getByRole("button", { name: "Google sign-in setup", exact: true })
+          .evaluate((button) => button === document.activeElement),
         true,
       );
       assert.equal(providerRequests.length, requestsBefore);

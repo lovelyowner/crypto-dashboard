@@ -12,8 +12,10 @@ type Props = {
   accounts: readonly { providerId: string }[];
   linking: boolean;
   busy: boolean;
+  selectedProvider: SupportedSocialProviderId | null;
   onConnect: (provider: SupportedSocialProviderId, linking: boolean) => void;
   onSetup: (provider: SupportedSocialProviderId) => void;
+  onDismissSetup: () => void;
 };
 
 export function AccountProviders({
@@ -22,10 +24,14 @@ export function AccountProviders({
   accounts,
   linking,
   busy,
+  selectedProvider,
   onConnect,
   onSetup,
+  onDismissSetup,
 }: Props) {
-  const [helpProvider, setHelpProvider] = useState<SupportedSocialProviderId | null>(null);
+  const [infoProvider, setInfoProvider] = useState<string | null>(null);
+  const otherServices = SOCIAL_PROVIDERS.filter((provider) => !provider.supported);
+  const selectedInfo = otherServices.find((provider) => provider.providerId === infoProvider);
   const supported = SOCIAL_PROVIDERS.filter((provider) => provider.supported);
   const enabled = supported.filter(
     (provider) =>
@@ -60,14 +66,18 @@ export function AccountProviders({
               type="button"
               key={provider.providerId}
               disabled={busy || availability !== "ready"}
+              data-provider-id={provider.providerId}
+              aria-pressed={!ready ? selectedProvider === provider.providerId : undefined}
               data-provider-action={
                 availability !== "ready" ? "pending" : ready ? "oauth" : "setup"
               }
               onClick={() => {
                 if (availability !== "ready") return;
-                if (ready) onConnect(provider.providerId, linking);
-                else {
-                  setHelpProvider(provider.providerId);
+                setInfoProvider(null);
+                if (ready) {
+                  onDismissSetup();
+                  onConnect(provider.providerId, linking);
+                } else {
                   onSetup(provider.providerId);
                 }
               }}
@@ -99,19 +109,56 @@ export function AccountProviders({
           Checking sign-in services…
         </p>
       )}
-      {availability === "ready" && !enabled.length && !helpProvider && (
+      {availability === "ready" && !enabled.length && !selectedProvider && !selectedInfo && (
         <p className="account-provider-note">
           The website owner needs to enable social sign-in. Choose a service to view setup help.
         </p>
       )}
       {availability === "ready" &&
-        helpProvider &&
-        !(configuration?.configured && configuration.providers[helpProvider] === true) && (
+        selectedProvider &&
+        !(configuration?.configured && configuration.providers[selectedProvider] === true) && (
           <p className="account-provider-note" role="status">
-            {socialProviderLabel(helpProvider)} sign-in is not enabled on this website yet. The
+            {socialProviderLabel(selectedProvider)} sign-in is not enabled on this website yet. The
             website owner must finish account and provider setup before one-click sign-in can work.
           </p>
         )}
+      <details className="account-service-details account-other-services">
+        <summary>More services</summary>
+        <div className="account-providers account-provider-information">
+          {otherServices.map((provider) => (
+            <button
+              key={provider.providerId}
+              type="button"
+              className="account-provider-info"
+              disabled={busy}
+              data-provider-id={provider.providerId}
+              aria-label={`${provider.label} availability`}
+              aria-pressed={infoProvider === provider.providerId}
+              onClick={() => {
+                onDismissSetup();
+                setInfoProvider(provider.providerId);
+              }}
+            >
+              <span className="account-provider-mark" aria-hidden="true">
+                {provider.mark}
+              </span>
+              <span>
+                {provider.label}
+                <small>Integration needed</small>
+              </span>
+            </button>
+          ))}
+        </div>
+        {selectedInfo && (
+          <p
+            className="account-provider-note account-provider-explanation"
+            data-provider-info={selectedInfo.providerId}
+            role="status"
+          >
+            {selectedInfo.requirement}
+          </p>
+        )}
+      </details>
     </section>
   );
 }

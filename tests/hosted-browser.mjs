@@ -288,6 +288,22 @@ async function runChecks() {
         assert.equal(await dialog.locator(".account-setup-details").count(), 0);
         assert.equal(
           await dialog.evaluate((root) => {
+            const form = root.querySelector(".account-form");
+            const links = root.querySelector(".account-form-links");
+            const choices = root.querySelector(".account-provider-options");
+            return Boolean(
+              form &&
+              links &&
+              choices &&
+              form.compareDocumentPosition(links) & Node.DOCUMENT_POSITION_FOLLOWING &&
+              links.compareDocumentPosition(choices) & Node.DOCUMENT_POSITION_FOLLOWING,
+            );
+          }),
+          true,
+          "Hosted social choices follow the credential form and account switches",
+        );
+        assert.equal(
+          await dialog.evaluate((root) => {
             const grid = root.querySelector(".account-providers");
             const alert = root.querySelector('[role="alert"]');
             return Boolean(
@@ -304,18 +320,55 @@ async function runChecks() {
           await dialog.locator(".account-provider-options .account-service-statuses").count(),
           0,
         );
-        for (const name of ["Bluesky", "Fluxer", "Stoat", "hey.xyz", "Mastodon"])
-          assert.equal(await dialog.getByText(name, { exact: true }).count(), 0);
-        await dialog.getByRole("button", { name: "Google sign-in setup", exact: true }).click();
+        assert.equal(await dialog.locator(".account-provider-info").count(), 5);
+        for (const button of await dialog.locator(".account-provider-info").all())
+          assert.equal(await button.isVisible(), false);
+        await dialog.getByLabel("Email address", { exact: true }).fill("preserved@example.com");
+        await dialog.getByLabel("Password", { exact: true }).fill("preserved password");
         const details = dialog.locator(".account-setup-details");
-        assert.equal(await details.getAttribute("open"), "");
-        assert.equal(
-          await details
-            .locator("summary")
-            .evaluate((summary) => summary === document.activeElement),
-          true,
-        );
+        for (const label of ["Google", "Discord", "Google"]) {
+          const button = dialog.getByRole("button", {
+            name: `${label} sign-in setup`,
+            exact: true,
+          });
+          await button.click();
+          assert.equal(await details.getAttribute("open"), "");
+          assert.ok(
+            (await details.locator(".account-service-statuses li").last().innerText()).includes(
+              label,
+            ),
+          );
+          assert.equal(await button.getAttribute("aria-pressed"), "true");
+          assert.equal(
+            await button.evaluate((element) => element === document.activeElement),
+            true,
+          );
+        }
         assert.match(await details.innerText(), /website owner/i);
+        await dialog.getByText("More services", { exact: true }).click();
+        for (const [id, label] of [
+          ["bluesky", "Bluesky"],
+          ["fluxer", "Fluxer"],
+          ["stoat", "Stoat"],
+          ["hey", "hey.xyz"],
+          ["mastodon", "Mastodon"],
+        ]) {
+          const button = dialog.getByRole("button", { name: `${label} availability`, exact: true });
+          await button.click();
+          const explanation = dialog.locator(`[data-provider-info='${id}']`);
+          await explanation.waitFor();
+          assert.ok((await explanation.innerText()).includes(label));
+          assert.equal(await button.getAttribute("aria-pressed"), "true");
+          assert.equal(await dialog.locator(".account-setup-details").count(), 0);
+        }
+        assert.equal(
+          await dialog.getByLabel("Email address", { exact: true }).inputValue(),
+          "preserved@example.com",
+        );
+        assert.equal(
+          await dialog.getByLabel("Password", { exact: true }).inputValue(),
+          "preserved password",
+        );
         assert.deepEqual(providerRequests, []);
         assert.equal(
           await dialog.getByRole("button", { name: "Sign in with a passkey", exact: true }).count(),

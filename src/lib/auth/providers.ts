@@ -9,28 +9,32 @@ export const SOCIAL_PROVIDERS = [
     label: "Bluesky",
     mark: "BS",
     supported: false,
-    requirement: "Needs an AT Protocol OAuth integration with verified DID identity.",
+    requirement:
+      "Bluesky sign-in is possible through AT Protocol OAuth. This website still needs that integration and verified Bluesky identity support; ordinary OAuth buttons cannot enable it.",
   },
   {
     providerId: "fluxer",
     label: "Fluxer",
     mark: "F",
     supported: false,
-    requirement: "Needs a verified Fluxer identity integration and registered application.",
+    requirement:
+      "Fluxer is not connected to this website yet. Its application registration and account-verification flow must be confirmed and integrated before it can be used to sign in.",
   },
   {
     providerId: "stoat",
     label: "Stoat",
     mark: "S",
     supported: false,
-    requirement: "Needs a verified Stoat identity integration and registered application.",
+    requirement:
+      "Stoat is not connected to this website yet. A supported third-party sign-in flow and proof of account control must be confirmed and integrated first.",
   },
   {
     providerId: "hey",
     label: "hey.xyz",
     mark: "hey",
     supported: false,
-    requirement: "Needs Lens account authentication and proof of account control.",
+    requirement:
+      "hey.xyz sign-in needs Lens account authentication and proof that you control the account. That integration is not connected to this website yet.",
   },
   {
     providerId: "mastodon",
@@ -38,7 +42,7 @@ export const SOCIAL_PROVIDERS = [
     mark: "M",
     supported: false,
     requirement:
-      "Needs instance-specific OAuth and verified account mapping without inventing an email.",
+      "Mastodon sign-in is possible through your Mastodon server. This website still needs server selection and verified account mapping; Mastodon does not provide the email required by the current login adapter.",
   },
 ] as const;
 
