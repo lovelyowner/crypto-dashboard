@@ -18,7 +18,7 @@ const serving = process.argv.includes("--serve");
 const apiRuntime = serving
   ? {
       directory: process.argv[3],
-      entryURL: pathToFileURL(resolve(process.argv[3], "api/[...path].js")),
+      entryURL: pathToFileURL(resolve(process.argv[3], "api/index.js")),
     }
   : await compileApiRuntime();
 const { ROOT_PROFILE_ROUTE_SOURCE, publicHandleFromPath } = await import(
@@ -27,6 +27,10 @@ const { ROOT_PROFILE_ROUTE_SOURCE, publicHandleFromPath } = await import(
 
 async function serveHostedBuild() {
   const { default: handleApi } = await import(apiRuntime.entryURL);
+  const config = JSON.parse(await readFile(resolve(project, "vercel.json"), "utf8"));
+  // Model the explicit prefix rewrite to the registered function. A bracketed
+  // filename alone matches only one segment in Vercel's zero-framework routing.
+  const apiRewrite = config.rewrites?.[0];
   const directory = resolve(project, "site");
   const contentTypes = {
     ".html": "text/html; charset=utf-8",
@@ -37,7 +41,11 @@ async function serveHostedBuild() {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url || "/", "http://localhost");
-      if (url.pathname.startsWith("/api/")) {
+      if (
+        apiRewrite?.source === "/api/:path*" &&
+        apiRewrite.destination === "/api/index" &&
+        (url.pathname === "/api" || url.pathname.startsWith("/api/"))
+      ) {
         await handleApi(request, response);
         return;
       }
@@ -141,6 +149,14 @@ async function runChecks() {
   const config = JSON.parse(await readFile(resolve(project, "vercel.json"), "utf8"));
   assert.equal(config.buildCommand, "npm run build:vercel");
   assert.equal(config.outputDirectory, "site");
+  assert.deepEqual(
+    config.rewrites?.[0],
+    {
+      source: "/api/:path*",
+      destination: "/api/index",
+    },
+    "Nested account routes must reach a named function before SPA rewrites",
+  );
   assert.ok(
     config.rewrites?.some((rule) => rule.source === "/login" && rule.destination === "/index.html"),
     "Vercel must serve the SPA on account callback/recovery route /login",
@@ -202,6 +218,8 @@ async function runChecks() {
       async () => {
         for (const pathname of [
           "/api/auth/get-session",
+          "/api/auth/callback/google?code=local-fixture&state=local-fixture",
+          "/api/auth/passkey/generate-authenticate-options",
           "/api/profile",
           "/api/profile/publication",
           "/api/public-profiles/hosted-creator",
@@ -211,6 +229,10 @@ async function runChecks() {
           assert.match(response.headers.get("cache-control"), /no-store/);
           assert.equal(typeof (await response.json()).message, "string");
         }
+        const missing = await fetch(`${baseURL}/api/unknown/nested-route`);
+        assert.equal(missing.status, 404);
+        assert.match(missing.headers.get("content-type"), /application\/json/);
+        assert.equal((await missing.json()).message, "API route not found.");
       },
     );
     browser = await chromium.launch({

@@ -282,6 +282,21 @@ async function openLogin(path = "/login", waitForReady = true) {
   await settingsRequested;
   if (waitForReady) await readyConfiguration();
 }
+async function openAccountSurface(path) {
+  const deploymentResponse = () =>
+    page.waitForResponse((response) => new URL(response.url()).pathname === "/api/deployment");
+  const metadata = deploymentResponse();
+  await page.goto(new URL(path, origin).href, { waitUntil: "domcontentloaded" });
+  await (await metadata).finished();
+  if (path === "/") {
+    const panelMetadata = deploymentResponse();
+    await page.getByRole("button", { name: "Open account", exact: true }).click();
+    await (await panelMetadata).finished();
+  }
+  const panel = page.locator(".account-panel");
+  await panel.waitFor();
+  return panel;
+}
 async function enabledChoices() {
   await page.waitForFunction(
     () =>
@@ -460,6 +475,12 @@ try {
         await page.locator(".account-error[role='alert']").innerText(),
         /account.*sign.in.*setup|website.*setup|not.*configured/i,
       );
+      assert.equal(
+        await page.getByText("Account sign-in needs website setup.", { exact: true }).count(),
+        0,
+        "A detailed sign-in error replaces the generic setup warning",
+      );
+      assert.equal(await page.getByRole("alert").count(), 1);
       assert.equal(new URL(page.url()).origin, origin);
       assert.equal(await page.locator(".account-setup-details").count(), 0);
       oauthMode = "stay";
@@ -531,6 +552,16 @@ try {
       );
       assert.equal(await retry().count(), 1);
       assert.equal(await page.locator(".account-error[role='alert']").innerText(), error);
+      assert.equal(
+        await details.evaluate((help) => {
+          const feedback = document.querySelector(".account-error[role='alert']");
+          return Boolean(
+            feedback && feedback.compareDocumentPosition(help) & Node.DOCUMENT_POSITION_FOLLOWING,
+          );
+        }),
+        true,
+        "Actionable sign-in feedback stays above the owner checklist",
+      );
       await details.getByRole("button", { name: "Close setup help", exact: true }).click();
       assert.equal(await page.locator(".account-setup-details").count(), 0);
       assert.equal(await help.getAttribute("aria-expanded"), "false");
@@ -1119,24 +1150,78 @@ try {
       );
     }
   });
-  await check("preview links use platform metadata rather than a guessed domain", async () => {
-    deployment = {
-      preview: true,
-      branchUrl: "https://app-git-preview-team.vercel.app",
-      deploymentUrl: "https://app-build-team.vercel.app",
-      commit: "a".repeat(40),
-      branch: "preview",
-    };
-    await page.goto(origin, { waitUntil: "domcontentloaded" });
-    await page.getByText("Preview build aaaaaaa", { exact: true }).click();
-    assert.equal(
-      await page
-        .getByRole("link", { name: "Open latest preview", exact: true })
-        .getAttribute("href"),
-      deployment.branchUrl,
-    );
-    deployment = { preview: false };
-  });
+  await check(
+    "direct login and the account modal expose exact preview build metadata",
+    async () => {
+      deployment = {
+        preview: true,
+        branchUrl: "https://app-git-preview-team.vercel.app",
+        deploymentUrl: "https://app-build-team.vercel.app",
+        commit: "a".repeat(40),
+        branch: "preview",
+      };
+      for (const path of ["/login", "/"]) {
+        const panel = await openAccountSurface(path);
+        const preview = panel.locator(".preview-deployment-status");
+        await preview.getByText("Preview build aaaaaaa", { exact: true }).click();
+        assert.equal(
+          await preview
+            .locator("dl > div")
+            .filter({ has: page.getByText("Branch", { exact: true }) })
+            .locator("dd")
+            .innerText(),
+          deployment.branch,
+        );
+        assert.equal(await preview.locator("code").innerText(), deployment.commit);
+        assert.equal(
+          await preview
+            .getByRole("link", { name: "Open latest preview", exact: true })
+            .getAttribute("href"),
+          deployment.branchUrl,
+        );
+        assert.equal(
+          await panel.evaluate((root) => {
+            const metadata = root.querySelector(".preview-deployment-status");
+            const back = root.querySelector(".account-done");
+            return Boolean(
+              metadata &&
+              back &&
+              metadata.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING,
+            );
+          }),
+          true,
+        );
+      }
+    },
+  );
+  await check(
+    "account previews never guess a branch alias or show production build controls",
+    async () => {
+      for (const metadata of [
+        {
+          preview: true,
+          deploymentUrl: "https://app-build-team.vercel.app",
+          commit: "b".repeat(40),
+          branch: "preview",
+        },
+        { preview: false },
+      ]) {
+        deployment = metadata;
+        for (const path of ["/login", "/"]) {
+          const panel = await openAccountSurface(path);
+          const preview = panel.locator(".preview-deployment-status");
+          if (metadata.preview) {
+            await preview.getByText("Preview build bbbbbbb", { exact: true }).click();
+            assert.equal(await preview.locator("code").innerText(), metadata.commit);
+          } else assert.equal(await preview.count(), 0);
+          assert.equal(
+            await panel.getByRole("link", { name: "Open latest preview", exact: true }).count(),
+            0,
+          );
+        }
+      }
+    },
+  );
   configuration = {
     configured: false,
     emailRecovery: false,
@@ -1149,6 +1234,11 @@ try {
   await check(
     "owner setup remains an explicit separate action and exposes no credential values",
     async () => {
+      assert.equal(
+        await page.getByText("Account sign-in needs website setup.", { exact: true }).isVisible(),
+        true,
+        "The generic warning still explains missing website setup before an action fails",
+      );
       const details = await setupHelp();
       const rows = details.locator(".account-service-statuses li");
       assert.equal(await rows.count(), 3);

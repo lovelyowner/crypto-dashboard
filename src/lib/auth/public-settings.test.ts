@@ -152,7 +152,7 @@ test("the actual Vercel config handler works with SDK and database imports forbi
         return resolved;
       },
     });
-    const { default: handler } = await import('./api/[...path].ts');
+    const { default: handler } = await import('./api/index.ts');
     async function invoke(method = 'GET') {
       const request = Object.assign(Readable.from([]), {
         method,

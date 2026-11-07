@@ -55,6 +55,7 @@ export function PreviewDeploymentStatus() {
         </dl>
         {status.branchUrl && (
           <>
+            <p>Deployment URLs stay on one build. This branch link follows successful updates.</p>
             <a href={status.branchUrl} target="_blank" rel="noreferrer noopener">
               Open latest preview
             </a>

@@ -37,7 +37,7 @@ export async function compileApiRuntime() {
   try {
     await writeFile(resolve(directory, "package.json"), JSON.stringify({ type: "module" }));
     await symlink(resolve(project, "node_modules"), resolve(directory, "node_modules"), "dir");
-    const entry = resolve(project, "api/[...path].ts");
+    const entry = resolve(project, "api/index.ts");
     const queue = [entry];
     const visited = new Set();
     for (const path of queue) {
@@ -76,7 +76,7 @@ export async function compileApiRuntime() {
     await cp(resolve(project, "migrations"), resolve(directory, "migrations"), { recursive: true });
     return {
       directory,
-      entryURL: pathToFileURL(resolve(directory, "api/[...path].js")).href,
+      entryURL: pathToFileURL(resolve(directory, "api/index.js")).href,
       cleanup,
     };
   } catch (error) {

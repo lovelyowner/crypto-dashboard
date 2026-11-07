@@ -2,6 +2,7 @@ import { handlePublicAuthConfigurationRequest } from "../src/lib/auth/public-set
 import { createNodeApiHandler } from "../src/lib/node-api.js";
 
 export default createNodeApiHandler(async (request) => {
+  // vercel.json routes nested API paths to this named function and preserves the request URL.
   // Settings discovery must survive an authentication SDK or database startup failure.
   if (new URL(request.url).pathname === "/api/auth/config")
     return handlePublicAuthConfigurationRequest(request);

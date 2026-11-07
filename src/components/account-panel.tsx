@@ -31,6 +31,7 @@ import { useAuthConfiguration } from "@/lib/auth/use-configuration";
 import { socialReturnError, socialReturnPath } from "@/lib/auth/social-return";
 import { AccountSetupStatus } from "./account-setup";
 import { AccountDataExport } from "./account-data-export";
+import { PreviewDeploymentStatus } from "./preview-deployment-status";
 import { requestSocialAuthorization } from "@/lib/auth/social-authorization";
 import {
   readAuthRequestDiagnostic,
@@ -386,21 +387,18 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   );
   const providerButtons = (linking: boolean) =>
     otherSignInOrigin ? null : (
-      <>
-        <AccountProviders
-          availability={configurationStatus}
-          accounts={accounts}
-          linking={linking}
-          busy={busy}
-          pendingProvider={socialPending}
-          authPending={isPending}
-          helpOpen={Boolean(setupRequest)}
-          onConnect={connect}
-          onHelp={() => setSetupRequest((value) => (value ? null : { provider: null, version: 1 }))}
-          onDismissSetup={() => setSetupRequest(null)}
-        />
-        {setupHelp}
-      </>
+      <AccountProviders
+        availability={configurationStatus}
+        accounts={accounts}
+        linking={linking}
+        busy={busy}
+        pendingProvider={socialPending}
+        authPending={isPending}
+        helpOpen={Boolean(setupRequest)}
+        onConnect={connect}
+        onHelp={() => setSetupRequest((value) => (value ? null : { provider: null, version: 1 }))}
+        onDismissSetup={() => setSetupRequest(null)}
+      />
     );
 
   const signInChoices = ordinarySignIn && (
@@ -549,7 +547,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           Retry
         </button>
       )}
-      {configuration && !configuration.configured && (
+      {configuration && !configuration.configured && !error && !configurationError && (
         <p className="account-help" role="alert">
           Account sign-in needs website setup.
         </p>
@@ -986,6 +984,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             Linking requires a verified email and authorization from the provider.
           </p>
           {providerButtons(true)}
+          {setupHelp}
           {accounts
             .filter((account) => account.providerId !== "credential")
             .map((account) => (
@@ -1083,6 +1082,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         <div className="account-signin-options">
           {signInChoices}
           {accountFeedback}
+          {setupHelp}
         </div>
       )}
       {user && (
@@ -1091,6 +1091,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           verification and service-held keys are not enabled.
         </p>
       )}
+      <PreviewDeploymentStatus />
       <button className="account-text-button account-done" type="button" onClick={onClose}>
         Back to dashboard
       </button>
