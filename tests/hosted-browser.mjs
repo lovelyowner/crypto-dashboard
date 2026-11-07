@@ -375,7 +375,8 @@ async function runChecks() {
         await help.click();
         const details = dialog.locator(".account-setup-details");
         assert.equal(await help.getAttribute("aria-expanded"), "true");
-        assert.equal(await details.getAttribute("open"), "");
+        assert.equal(await details.isVisible(), true);
+        assert.equal(await details.locator("summary").count(), 0);
         assert.equal(await details.locator(".account-service-statuses li").count(), 3);
         assert.equal(providerRequests.length, 5, "Owner diagnostics do not invoke authentication");
         assert.equal(

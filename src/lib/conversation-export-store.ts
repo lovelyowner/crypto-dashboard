@@ -1,13 +1,19 @@
 import type { Sql } from "./db.js";
 import {
   CONVERSATION_EXPORT_LIMITS,
+  parseConversationExportSelection,
+  type ConversationExportSelection,
   type ConversationExportSnapshot,
 } from "./conversation-export.js";
 
 /** A single statement provides one snapshot without relying on pooled transaction affinity. */
 export function createSqlConversationExportStore(sql: Pick<Sql, "query">) {
   return {
-    async readSnapshot(userId: string): Promise<ConversationExportSnapshot> {
+    async readSnapshot(
+      userId: string,
+      selection?: ConversationExportSelection,
+    ): Promise<ConversationExportSnapshot> {
+      const range = selection ? parseConversationExportSelection(selection) : undefined;
       const [row] = await sql.query<{
         exportedAt: Date | string;
         conversationCount: number;
@@ -19,7 +25,9 @@ export function createSqlConversationExportStore(sql: Pick<Sql, "query">) {
           select m.id,m.kind,m.body,m.anonymous,m.sender_name,m.recipient_handle,m.created_at,
             m.payment_status,m.recipient_id,m.sender_id,m.recipient_read_at,m.sender_read_at,m.last_activity_at
           from creator_messages m
-          where m.sender_id=$1 or (m.recipient_id=$1 and m.payment_status<>'pending')
+          where (m.sender_id=$1 or (m.recipient_id=$1 and m.payment_status<>'pending'))
+            and ($5::date is null or m.created_at>=($5::date::timestamp at time zone 'UTC'))
+            and ($6::date is null or m.created_at<(($6::date+1)::timestamp at time zone 'UTC'))
           order by m.created_at,m.id limit $2
         ), message_count as (select count(*)::integer as count from messages),
         replies as materialized (
@@ -39,12 +47,16 @@ export function createSqlConversationExportStore(sql: Pick<Sql, "query">) {
           select coalesce(json_agg(json_build_object(
             'id',m.id,'kind',m.kind,'text',m.body,'anonymous',m.anonymous,
             'senderName',case when m.anonymous then 'Anonymous' else m.sender_name end,
-            'recipientHandle',m.recipient_handle,'createdAt',m.created_at,'paymentStatus',m.payment_status,
+            'recipientHandle',m.recipient_handle,
+            'createdAt',to_char(m.created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+            'paymentStatus',m.payment_status,
             'direction',case when m.recipient_id=$1 and m.payment_status<>'pending' then 'received' else 'sent' end,
-            'readAt',case when m.recipient_id=$1 and m.payment_status<>'pending' then m.recipient_read_at else coalesce(m.sender_read_at,m.created_at) end,
-            'lastActivityAt',coalesce(m.last_activity_at,m.created_at),
+            'readAt',to_char((case when m.recipient_id=$1 and m.payment_status<>'pending' then m.recipient_read_at else coalesce(m.sender_read_at,m.created_at) end) at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+            'lastActivityAt',to_char(coalesce(m.last_activity_at,m.created_at) at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
             'replies',(select coalesce(json_agg(json_build_object(
-              'id',r.id,'text',r.body,'createdAt',r.created_at,'fromCreator',r.author_id=m.recipient_id
+              'id',r.id,'text',r.body,
+              'createdAt',to_char(r.created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+              'fromCreator',r.author_id=m.recipient_id
             ) order by r.activity_revision,r.id),'[]'::json)
               from creator_message_replies r join replies p on p.id=r.id where r.message_id=m.id)
           ) order by m.created_at,m.id),'[]'::json) from messages m
@@ -54,6 +66,8 @@ export function createSqlConversationExportStore(sql: Pick<Sql, "query">) {
           CONVERSATION_EXPORT_LIMITS.conversations + 1,
           CONVERSATION_EXPORT_LIMITS.replies + 1,
           CONVERSATION_EXPORT_LIMITS.bytes,
+          range?.createdFrom ?? null,
+          range?.createdThrough ?? null,
         ],
       );
       if (!row) throw new Error("Conversation snapshot unavailable.");

@@ -5,18 +5,18 @@ Development uses `preview`; production remains on `main`. See the [feature overv
 ## Current priorities
 
 1. **Verify live Google/Discord login.** Inspect the current deployment's HTTP response and function logs, then verify registered applications, the stable callback origin, account linking, and recovery. Local OAuth fixtures and configuration flags do not prove live authorization. The requested preview hostname is saved in the Codex environment network draft; access has not been confirmed.
-2. **Larger conversation archives.** Add filters or pagination backed by a frozen server snapshot. The current single-download archive rejects oversized data instead of truncating it. Ordinary inbox pagination cannot guarantee a consistent archive while messages change.
+2. **Full archives beyond one download.** Date filters now let many larger inboxes download smaller selections. Accounts that exceed the limits within one day or conversation still need pagination backed by a frozen server snapshot. Separate date-range requests have independent snapshots.
 3. **Verified ERC20/SPL pricing.** Select a source with exact contract/mint matching, timestamps, and explicit coverage before adding token values to portfolio totals.
 
 ## Implemented in this update
 
-| Add or simplify                | Result                                                                                                                                                                                                                                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Conversation archive           | A fresh authenticated account can download its accessible conversations and all their replies from one database statement snapshot. The read uses the same ownership and pending-message visibility rules as the inbox and does not mark messages read. |
-| Explicit download completeness | The archive has its own `accessible-conversations` scope and a complete marker. Limits are 500 conversations, 5,000 replies, and 2 MiB UTF-8; any overflow rejects the entire download. No partial archive is presented as complete.                    |
-| Private fields excluded        | Anonymous names stay anonymous. Participant/author/moderation actor IDs, payment IDs/proofs, provider credentials, and authentication secrets are excluded. Anonymous sent notes without account-inbox ownership are outside this scope.                |
-| One connected-account row      | A connected service has one status row with its Disconnect action. The picker offers only unlinked services; confirmation and last-method protection remain.                                                                                            |
-| Shorter recovery copy          | Authenticator status covers sign-in methods accurately. Repeated promotional/recovery explanations are reduced while key-backup and recovery-code warnings remain.                                                                                      |
+| Add or simplify                      | Result                                                                                                                                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date-filtered conversation downloads | Optional inclusive UTC creation dates select conversations before applying limits. Every reply is retained. Clear dates returns to the original full-scope version 1 download.                  |
+| Explicit filtered scope              | Version 2 archives record their selected dates and use `filtered-accessible-conversations`. The browser rejects a response with different dates or the wrong scope.                             |
+| Honest limits                        | Each range still has limits of 500 conversations, 5,000 replies, and 2 MiB UTF-8. Oversized selections are rejected without partial files; users can choose a smaller range.                    |
+| Less routine copy                    | Date and limit explanations live in the filter panel, with the active selection visible beside the download controls.                                                                           |
+| One setup-help control               | The sign-in setup button controls one help panel. Removing its duplicate collapsible summary keeps Retry reachable and the expanded state accurate. Errors and recovery actions remain visible. |
 
 The existing account/profile export remains separate and explicitly incomplete as a whole-account archive. Wallets, watchlists, and token watches retain their own backup controls. See [export scopes and limits](account-data.md).
 

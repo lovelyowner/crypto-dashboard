@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { PublicAuthConfiguration } from "@/lib/auth/public-configuration";
 import { socialProviderLabel, type SupportedSocialProviderId } from "@/lib/auth/providers";
 import type { AuthRequestDiagnostic } from "@/lib/auth/request-diagnostic";
@@ -19,11 +19,6 @@ export function AccountSetupStatus({
   onClose?: () => void;
 }) {
   const [notice, setNotice] = useState("");
-  const details = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    if (!request || !details.current) return;
-    details.current.open = true;
-  }, [request]);
   if (!request) return null;
   const setup = configuration?.setup;
   const prefix = setup?.environment === "preview" ? "PREVIEW_" : "";
@@ -58,8 +53,10 @@ export function AccountSetupStatus({
     "Configure these in the matching server environment, register callbacks with each provider, then redeploy. This checklist contains no credential values.",
   ].join("\n");
   return (
-    <details ref={details} className="account-service-details account-setup-details">
-      <summary>Website sign-in setup</summary>
+    <section
+      className="account-service-details account-setup-details"
+      aria-label="Website sign-in setup"
+    >
       {!configuration && request && (
         <p className="account-help account-setup-availability" role="status">
           {request.provider ? socialProviderLabel(request.provider) : "Social"} sign-in availability{" "}
@@ -157,6 +154,6 @@ export function AccountSetupStatus({
           Close setup help
         </button>
       )}
-    </details>
+    </section>
   );
 }

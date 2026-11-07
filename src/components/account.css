@@ -316,6 +316,18 @@
   flex-wrap: wrap;
   margin-top: 12px;
 }
+.account-export-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.account-export-dates .account-label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.account-export-dates input {
+  min-width: 0;
+}
 .account-setup,
 .account-backup {
   border: 1px solid var(--ui-border);

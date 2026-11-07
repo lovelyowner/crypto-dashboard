@@ -7,7 +7,9 @@ import {
   CONVERSATION_EXPORT_OMITTED,
   createConversationExportHandler,
   parseConversationArchive,
+  parseConversationExportSelection,
   type ConversationArchive,
+  type ConversationExportSelection,
   type ConversationExportSnapshot,
 } from "./conversation-export.js";
 import { createSqlConversationExportStore } from "./conversation-export-store.js";
@@ -19,7 +21,7 @@ const sender = "sender-private-id";
 const stranger = "stranger-private-id";
 const actor = "anonymous-actor-private-id";
 
-function archive(): ConversationArchive {
+function archive(): Extract<ConversationArchive, { version: 1 }> {
   return {
     version: 1,
     scope: "accessible-conversations",
@@ -48,6 +50,7 @@ function archive(): ConversationArchive {
 function handlerFixture(snapshot?: ConversationExportSnapshot) {
   let reads = 0;
   let readUser = "";
+  let readSelection: ConversationExportSelection | undefined;
   let configured = true;
   let session: {
     user: { id: string };
@@ -69,9 +72,10 @@ function handlerFixture(snapshot?: ConversationExportSnapshot) {
     },
     now: () => now,
     getSession: async () => session,
-    readSnapshot: async (id) => {
+    readSnapshot: async (id, selection) => {
       reads++;
       readUser = id;
+      readSelection = selection;
       return source;
     },
   });
@@ -85,6 +89,7 @@ function handlerFixture(snapshot?: ConversationExportSnapshot) {
     },
     reads: () => reads,
     readUser: () => readUser,
+    readSelection: () => readSelection,
     request: (method = "GET", query = "") =>
       handler(new Request(`https://app.example/api/account/messages-export${query}`, { method })),
   };
@@ -138,6 +143,72 @@ test("conversation archives require exact complete DTOs, matching counts, and un
     mutate(value);
     assert.throws(() => parseConversationArchive(value));
   }
+});
+
+test("conversation date selections require exact inclusive Gregorian UTC days", () => {
+  const base: ConversationExportSelection = {
+    createdFrom: "2024-02-29",
+    createdThrough: "2024-02-29",
+    timeZone: "UTC",
+  };
+  assert.deepEqual(parseConversationExportSelection(base), base);
+  for (const selection of [
+    { ...base, createdFrom: null },
+    { ...base, createdThrough: null },
+    { ...base, createdFrom: "0001-01-01", createdThrough: "9999-12-31" },
+    { ...base, createdFrom: "2000-02-29" },
+  ])
+    assert.deepEqual(parseConversationExportSelection(selection), selection);
+  for (const selection of [
+    { ...base, createdFrom: null, createdThrough: null },
+    { ...base, createdFrom: "" },
+    { ...base, createdFrom: "2023-02-29" },
+    { ...base, createdFrom: "1900-02-29" },
+    { ...base, createdFrom: "2024-02-30" },
+    { ...base, createdFrom: "2024-13-01" },
+    { ...base, createdFrom: "0000-01-01" },
+    { ...base, createdFrom: "10000-01-01" },
+    { ...base, createdFrom: "2024-2-29" },
+    { ...base, createdFrom: "2024-02-29T00:00:00Z" },
+    { ...base, createdFrom: " 2024-02-29" },
+    { ...base, createdFrom: 2024 },
+    { ...base, createdFrom: "2024-03-01" },
+    { ...base, timeZone: "Europe/London" },
+    { ...base, direction: "sent" },
+    { createdFrom: base.createdFrom, timeZone: "UTC" },
+  ])
+    assert.throws(() => parseConversationExportSelection(selection));
+});
+
+test("filtered v2 archives declare their selection and validate parent UTC days while retaining all replies", () => {
+  const value: Extract<ConversationArchive, { version: 2 }> = {
+    ...archive(),
+    version: 2,
+    scope: "filtered-accessible-conversations",
+    selection: { createdFrom: "2026-11-06", createdThrough: "2026-11-06", timeZone: "UTC" },
+  };
+  value.conversations[0].createdAt = "2026-11-07T00:30:00+02:00";
+  value.conversations[0].replies[0].createdAt = "2030-01-01T00:00:00.000Z";
+  const parsed = parseConversationArchive(value);
+  assert.equal(parsed.version, 2);
+  assert.equal(parsed.scope, "filtered-accessible-conversations");
+  assert.equal(parsed.conversations[0].createdAt, "2026-11-06T22:30:00.000Z");
+  assert.equal(parsed.conversations[0].replies[0].createdAt, "2030-01-01T00:00:00.000Z");
+  assert.deepEqual(parsed.version === 2 && parsed.selection, value.selection);
+  for (const createdAt of ["2026-11-05T23:59:59.999Z", "2026-11-06T23:30:00-02:00"])
+    assert.throws(() =>
+      parseConversationArchive({
+        ...value,
+        conversations: [{ ...value.conversations[0], createdAt }],
+      }),
+    );
+  const missingSelection = { ...value };
+  Reflect.deleteProperty(missingSelection, "selection");
+  assert.throws(() => parseConversationArchive(missingSelection));
+  assert.throws(() => parseConversationArchive({ ...value, scope: "accessible-conversations" }));
+  assert.throws(() => parseConversationArchive({ ...value, complete: false }));
+  assert.throws(() => parseConversationArchive({ ...archive(), selection: value.selection }));
+  assert.throws(() => parseConversationArchive({ ...archive(), version: 3 }));
 });
 
 test("conversation parser preserves text and uses the same safe displayed sender names as the inbox", () => {
@@ -199,6 +270,44 @@ test("successful export is a private attachment and client-supplied owners never
     /attachment; filename="fathom-conversations-2026-11-06.json"/,
   );
   assert.deepEqual(parseConversationArchive(await response.json()), archive());
+  assert.equal(f.readSelection(), undefined);
+});
+
+test("date filter requests authenticate first, reject invalid bounds before SQL, and explicitly export v2", async () => {
+  const f = handlerFixture();
+  for (const query of [
+    "?from=",
+    "?through=",
+    "?from=2026-11-06&from=2026-11-06",
+    "?through=2026-11-06&through=2026-11-06",
+    "?from=2026-11-07&through=2026-11-06",
+    "?from=2026-02-29",
+    "?through=0000-01-01",
+    "?through=2026-11-06T00:00:00Z",
+  ]) {
+    const response = await f.request("GET", query);
+    assert.equal(response.status, 400, query);
+    assert.equal(response.headers.has("content-disposition"), false);
+  }
+  assert.equal(f.reads(), 0);
+  for (const query of [
+    "?from=2026-11-06",
+    "?through=2026-11-06",
+    "?from=2026-11-06&through=2026-11-06&userId=not-the-owner",
+  ]) {
+    const response = await f.request("GET", query);
+    assert.equal(response.status, 200);
+    const value = parseConversationArchive(await response.json());
+    assert.equal(value.version, 2);
+    assert.equal(value.scope, "filtered-accessible-conversations");
+    assert.deepEqual(value.version === 2 && value.selection, f.readSelection());
+    assert.equal(f.readUser(), owner);
+    assert.match(response.headers.get("content-disposition")!, /through-.*\.json/);
+  }
+  const unauthorized = handlerFixture();
+  unauthorized.setSession(null);
+  assert.equal((await unauthorized.request("GET", "?from=invalid")).status, 401);
+  assert.equal(unauthorized.reads(), 0);
 });
 
 test("all row, reply, or UTF-8 overflow returns 413 without a partial download", async () => {
@@ -269,6 +378,7 @@ async function sqlFixture() {
       name?: string;
       text?: string;
       moderationActor?: string | null;
+      createdAt?: string;
     } = {},
   ) {
     const payment = ["paid", "pending"].includes(options.status ?? "free")
@@ -287,7 +397,7 @@ async function sqlFixture() {
         options.text ?? "Hello 🌙",
         options.status ?? "free",
         payment,
-        stamp,
+        options.createdAt ?? stamp,
         options.moderationActor ?? options.sender ?? sender,
       ],
     );
@@ -425,6 +535,163 @@ test("SQL conversation archives are owner-scoped, complete snapshots with bounde
       assert.deepEqual(value.conversations, []);
       assert.equal(value.complete, true);
     });
+    await t.test(
+      "UTC creation days include their entire last day and every reply without broadening ownership",
+      async () => {
+        await clear();
+        await f.pg.exec("set time zone 'America/Los_Angeles'");
+        try {
+          await f.message("before", { createdAt: "2024-02-28T23:59:59.999999Z" });
+          await f.message("first", { createdAt: "2024-02-29T00:00:00Z" });
+          await f.message("last", { createdAt: "2024-02-29T23:59:59.999999Z" });
+          await f.message("after", { createdAt: "2024-03-01T00:00:00Z" });
+          await f.message("sent-before", {
+            sender: owner,
+            recipient: sender,
+            createdAt: "2024-02-28T23:59:59.999999Z",
+          });
+          await f.message("sent-pending", {
+            sender: owner,
+            recipient: sender,
+            status: "pending",
+            createdAt: "2024-02-29T00:00:00Z",
+          });
+          await f.message("stranger-in-range", {
+            recipient: stranger,
+            createdAt: "2024-02-29T12:00:00Z",
+          });
+          await f.message("pending-in-range", {
+            status: "pending",
+            createdAt: "2024-02-29T12:00:00Z",
+          });
+          await f.replies("first", 2);
+          const selection: ConversationExportSelection = {
+            createdFrom: "2024-02-29",
+            createdThrough: "2024-02-29",
+            timeZone: "UTC",
+          };
+          const before = await f.pg.query(
+            "select id,recipient_read_at,sender_read_at,recipient_read_revision,sender_read_revision from creator_messages order by id",
+          );
+          const calls = f.calls();
+          const snapshot = await f.store.readSnapshot(owner, selection);
+          assert.equal(f.calls(), calls + 1);
+          const response = await handlerFixture(snapshot).request(
+            "GET",
+            "?from=2024-02-29&through=2024-02-29",
+          );
+          assert.equal(response.status, 200);
+          const value = parseConversationArchive(await response.json());
+          assert.equal(value.version, 2);
+          assert.deepEqual(value.version === 2 && value.selection, selection);
+          assert.deepEqual(value.counts, { conversations: 3, replies: 2 });
+          assert.deepEqual(
+            value.conversations.map((row) => row.id),
+            ["first", "sent-pending", "last"],
+          );
+          assert.equal(value.conversations[0].replies[0].createdAt.slice(0, 10), "2026-11-06");
+          assert.equal(value.conversations[2].createdAt, "2024-02-29T23:59:59.999Z");
+          assert.deepEqual(
+            (
+              await f.pg.query(
+                "select id,recipient_read_at,sender_read_at,recipient_read_revision,sender_read_revision from creator_messages order by id",
+              )
+            ).rows,
+            before.rows,
+          );
+          const fromOnly = await f.store.readSnapshot(owner, {
+            ...selection,
+            createdThrough: null,
+          });
+          assert.equal(fromOnly.counts.conversations, 4);
+          const throughOnly = await f.store.readSnapshot(owner, {
+            ...selection,
+            createdFrom: null,
+          });
+          assert.equal(throughOnly.counts.conversations, 5);
+          const empty = await f.store.readSnapshot(owner, {
+            ...selection,
+            createdFrom: "2024-03-02",
+            createdThrough: "2024-03-02",
+          });
+          const emptyResponse = await handlerFixture(empty).request(
+            "GET",
+            "?from=2024-03-02&through=2024-03-02",
+          );
+          assert.equal(emptyResponse.status, 200);
+          assert.deepEqual((await emptyResponse.json()).counts, { conversations: 0, replies: 0 });
+          assert.equal((await f.store.readSnapshot(owner)).counts.conversations, 6);
+        } finally {
+          await f.pg.exec("set time zone 'UTC'");
+        }
+      },
+    );
+    await t.test(
+      "UTC date bounds remain exact on DST days and at the supported year limits",
+      async () => {
+        await clear();
+        for (const date of ["0001-01-01", "2024-03-10", "2024-11-03", "9999-12-31"])
+          await f.message(`day-${date}`, { createdAt: `${date}T23:59:59.999999Z` });
+        await f.pg.exec("set time zone 'America/New_York'");
+        try {
+          for (const date of ["0001-01-01", "2024-03-10", "2024-11-03", "9999-12-31"]) {
+            const selection: ConversationExportSelection = {
+              createdFrom: date,
+              createdThrough: date,
+              timeZone: "UTC",
+            };
+            const snapshot = await f.store.readSnapshot(owner, selection);
+            assert.equal(snapshot.counts.conversations, 1, date);
+            const response = await handlerFixture(snapshot).request(
+              "GET",
+              `?from=${date}&through=${date}`,
+            );
+            assert.equal(response.status, 200, date);
+            assert.equal((await response.json()).conversations[0].id, `day-${date}`);
+          }
+        } finally {
+          await f.pg.exec("set time zone 'UTC'");
+        }
+      },
+    );
+    await t.test(
+      "date selection precedes overflow checks and selected oversize still rejects all data",
+      async () => {
+        await clear();
+        await f.pg.query(
+          `insert into creator_messages(id,recipient_id,recipient_handle,sender_id,sender_name,anonymous,kind,body,payment_status,created_at)
+        select 'older-' || n,$1,'creator',$2,'Visible sender',false,'dm','Hello','free','2020-01-01T00:00:00Z' from generate_series(1,501) n`,
+          [owner, sender],
+        );
+        await f.message("selected-small");
+        const selection: ConversationExportSelection = {
+          createdFrom: "2026-11-06",
+          createdThrough: "2026-11-06",
+          timeZone: "UTC",
+        };
+        assert.equal((await f.store.readSnapshot(owner)).overflow, true);
+        const selected = await f.store.readSnapshot(owner, selection);
+        const success = await handlerFixture(selected).request(
+          "GET",
+          "?from=2026-11-06&through=2026-11-06",
+        );
+        assert.equal(success.status, 200);
+        assert.deepEqual((await success.json()).counts, { conversations: 1, replies: 0 });
+        const oversized = await f.store.readSnapshot(owner, {
+          ...selection,
+          createdFrom: "2020-01-01",
+          createdThrough: "2020-01-01",
+        });
+        assert.equal(oversized.overflow, true);
+        assert.equal(oversized.conversations, null);
+        const refused = await handlerFixture(oversized).request(
+          "GET",
+          "?from=2020-01-01&through=2020-01-01",
+        );
+        assert.equal(refused.status, 413);
+        assert.equal(refused.headers.has("content-disposition"), false);
+      },
+    );
     await t.test(
       "conversation and reply sentinel limits reject the archive instead of slicing it",
       async () => {

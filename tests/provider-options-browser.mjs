@@ -405,10 +405,10 @@ async function setupHelp() {
   const before = providerRequests.length;
   const button = page.getByRole("button", { name: "Website sign-in setup", exact: true });
   await button.click();
-  const details = page.locator(".account-setup-details");
+  const details = page.getByRole("region", { name: "Website sign-in setup", exact: true });
   await details.waitFor();
   assert.equal(await button.getAttribute("aria-expanded"), "true");
-  assert.equal(await details.getAttribute("open"), "");
+  assert.equal(await details.isVisible(), true);
   assert.equal(providerRequests.length, before, "Explicit setup help never starts OAuth");
   return details;
 }
@@ -511,6 +511,48 @@ try {
         0,
         "An OAuth action closes owner diagnostics",
       );
+    },
+  );
+  await check(
+    "owner help has one disclosure and keeps retry reachable through opening and closing",
+    async () => {
+      const before = providerRequests.length;
+      const help = page.getByRole("button", { name: "Website sign-in setup", exact: true });
+      const retry = () => page.getByRole("button", { name: "Retry sign-in options", exact: true });
+      assert.equal(await retry().isVisible(), true);
+      const error = await page.locator(".account-error[role='alert']").innerText();
+      let details = await setupHelp();
+      assert.equal(await details.locator("details, summary").count(), 0);
+      assert.equal(
+        await details
+          .getByRole("button", { name: "Retry sign-in options", exact: true })
+          .isVisible(),
+        true,
+      );
+      assert.equal(await retry().count(), 1);
+      assert.equal(await page.locator(".account-error[role='alert']").innerText(), error);
+      await details.getByRole("button", { name: "Close setup help", exact: true }).click();
+      assert.equal(await page.locator(".account-setup-details").count(), 0);
+      assert.equal(await help.getAttribute("aria-expanded"), "false");
+      assert.equal(await help.evaluate((element) => element === document.activeElement), true);
+      assert.equal(await retry().isVisible(), true);
+
+      details = await setupHelp();
+      configurationMode = "pending";
+      await details.getByRole("button", { name: "Retry sign-in options", exact: true }).click();
+      await loadingOptions().waitFor();
+      assert.equal(await details.isVisible(), true);
+      configurationMode = "ready";
+      await releaseConfiguration(configuration);
+      await readyConfiguration();
+      assert.equal(providerRequests.length, before, "Help and retry never initiate authentication");
+      await help.click();
+      assert.equal(await page.locator(".account-setup-details").count(), 0);
+      assert.equal(await help.getAttribute("aria-expanded"), "false");
+
+      configurationMode = "invalid-schema";
+      await openLogin("/login", false);
+      await failedOptions().waitFor();
     },
   );
   configuration = { ...configuration, configured: true, providers: allProviders };

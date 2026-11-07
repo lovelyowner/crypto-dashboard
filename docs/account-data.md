@@ -7,7 +7,15 @@ In Account & security → Account data, choose a JSON download after signing in 
 | Download account and profile data | `account-profile`: account details, linked service IDs, private profile draft, and published/unpublished profile snapshot.                          | Up to 50 linked identities and 256 KiB. The overall export explicitly has `complete: false`; it is one part of the account's data.                                                           |
 | Download conversations            | `accessible-conversations`: all conversations visible to the account in Received, Sent, and Donations, including every reply in the selected scope. | 500 conversations, 5,000 replies, 2 MiB UTF-8. Success has `complete: true` for this scope and matching counts. If any limit is exceeded, the request returns 413 and nothing is downloaded. |
 
-The existing account/profile endpoint is GET `/api/account/export`. The conversation endpoint is GET `/api/account/messages-export`. Both formats have version 1, with separate scope markers. The browser validates the returned format before downloading. Either download can be cancelled; leaving the account panel or switching accounts prevents a late response from saving a file.
+The existing account/profile endpoint is GET `/api/account/export`. The conversation endpoint is GET `/api/account/messages-export`. Account/profile and unfiltered conversation downloads retain their version 1 formats. Date-filtered conversation downloads use version 2 and the separate `filtered-accessible-conversations` scope. The browser validates the format and checks that the returned scope and dates match the requested download before saving it. Either download can be cancelled; leaving the account panel or switching accounts prevents a late response from saving a file.
+
+## Date filters
+
+Open **Filter conversations**, choose **Created from (UTC)** and/or **Created through (UTC)**, then select **Download conversations**. Either date may be left empty. **Clear dates** returns to the unfiltered download. The selected dates remain visible when the filter panel is collapsed, and filtered filenames include the bounds.
+
+Both dates include their entire UTC calendar day. Filters select a conversation by its creation date; every accessible reply in that conversation is included, even if the reply was written outside the chosen dates. They do not filter the last activity or the dates of individual replies.
+
+The API accepts `from=YYYY-MM-DD` and `through=YYYY-MM-DD`. Empty supplied values, duplicate recognized parameters, invalid Gregorian dates, and a start after the end return 400 before reading messages. Other query parameters cannot select a different account or change the date selection. A successful filtered archive contains `selection: { createdFrom, createdThrough, timeZone: "UTC" }`, with absent bounds represented by `null`. Its `complete: true` marker covers only that selection, not the entire inbox.
 
 ## Conversation scope and consistency
 
@@ -15,7 +23,9 @@ One SQL statement reads the archive from a consistent database snapshot and reco
 
 Anonymous incoming messages retain the name “Anonymous.” Anonymous sent notes without account-inbox ownership are excluded; the export never uses private moderation actors to connect them to an account. Message content, display names, profile handles, creation/activity/read dates, direction, kind, payment-status labels, and reply content/dates/creator-role flags are included. Participant IDs, reply author IDs, moderation actor identifiers, payment IDs/proofs, merchant credentials, and moderation reports are excluded.
 
-This release does not paginate large archives. A successful download is never silently truncated; an oversized account needs a future filtered or paginated export backed by a frozen snapshot. Ordinary inbox pagination cannot provide that guarantee while conversations change.
+The same limits apply to each selected range. If a download is too large, the filter panel opens so a smaller range can be chosen. A day with too many conversations, or one conversation with too many replies, can still exceed the limits; no partial file is created.
+
+This release does not paginate large archives. Each download has its own database snapshot. Separate date-range downloads are not a shared frozen archive, and their replies or payment visibility can change between requests. A future paginated archive needs a frozen server snapshot; ordinary inbox pagination cannot provide that guarantee while conversations change.
 
 ## Other backups and retention
 

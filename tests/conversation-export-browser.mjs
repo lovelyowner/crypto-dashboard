@@ -7,7 +7,8 @@ import { chromium } from "playwright";
 
 const origin = new URL(process.env.TEST_BASE_URL || "http://127.0.0.1:8080").origin;
 const endpoint = `${origin}/api/account/messages-export`;
-const routePattern = "**/api/account/messages-export";
+const routePattern = (url) =>
+  url.origin === origin && url.pathname === "/api/account/messages-export";
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
   headless: true,
@@ -136,6 +137,11 @@ function noPrivateFields(value) {
     noPrivateFields(child);
   }
 }
+function shiftDate(date, days) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 function readState(inbox) {
   return {
     unreadCounts: inbox.unreadCounts,
@@ -221,11 +227,16 @@ try {
       "A failed, cancelled, or detached export must not download a file",
     );
   };
-  const downloadConversations = async () => {
+  const downloadConversations = async (selection) => {
     const waiting = page.waitForEvent("download");
     await conversationButton().click();
     const download = await waiting;
-    assert.equal(download.suggestedFilename(), "fathom-conversations.json");
+    assert.equal(
+      download.suggestedFilename(),
+      selection
+        ? `fathom-conversations-${selection.createdFrom ?? "start"}-through-${selection.createdThrough ?? "end"}.json`
+        : "fathom-conversations.json",
+    );
     return readDownload(download);
   };
   let archive;
@@ -305,6 +316,200 @@ try {
         .getByRole("status")
         .filter({ hasText: "Account and profile data downloaded." })
         .waitFor();
+    },
+  );
+
+  const fromInput = exportSection.getByLabel("Created from (UTC)", { exact: true });
+  const throughInput = exportSection.getByLabel("Created through (UTC)", { exact: true });
+  const clearDates = exportSection.getByRole("button", { name: "Clear dates", exact: true });
+  const createdDates = archive.conversations.map(({ createdAt }) => createdAt.slice(0, 10)).sort();
+  const firstDate = createdDates[0];
+  const lastDate = createdDates.at(-1);
+  const selection = { createdFrom: firstDate, createdThrough: lastDate, timeZone: "UTC" };
+  let filteredArchive;
+  async function setDates(value) {
+    await fromInput.fill(value.createdFrom ?? "");
+    await throughInput.fill(value.createdThrough ?? "");
+  }
+  async function downloadSelected(value) {
+    const waiting = page.waitForRequest((request) => routePattern(new URL(request.url())));
+    const downloaded = await downloadConversations(value);
+    const request = await waiting;
+    assert.equal(request.method(), "GET");
+    const parameters = new URL(request.url()).searchParams;
+    assert.deepEqual(
+      [...parameters.entries()].sort(),
+      [
+        ...(value.createdFrom ? [["from", value.createdFrom]] : []),
+        ...(value.createdThrough ? [["through", value.createdThrough]] : []),
+      ].sort(),
+      "Only the selected UTC date bounds are sent to the API",
+    );
+    assert.equal(downloaded.value.version, 2);
+    assert.equal(downloaded.value.scope, "filtered-accessible-conversations");
+    assert.equal(downloaded.value.complete, true);
+    assert.deepEqual(downloaded.value.selection, value);
+    noPrivateFields(downloaded.value);
+    return downloaded;
+  }
+
+  await check(
+    "UTC date selection downloads complete matching conversations and clear restores the unfiltered v1 archive",
+    async () => {
+      await exportSection
+        .locator("summary")
+        .filter({ hasText: /^Filter conversations$/ })
+        .click();
+      const before = readState(await get(owner, "/api/inbox"));
+      await setDates(selection);
+      const viewport = page.viewportSize();
+      await page.setViewportSize({ width: 390, height: 844 });
+      try {
+        assert.equal(
+          await exportSection.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+          true,
+          "Date filters fit their account section on a narrow screen",
+        );
+        assert.equal(
+          await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          true,
+          "The mobile account view has no horizontal page overflow",
+        );
+        for (const input of [fromInput, throughInput]) {
+          const bounds = await input.boundingBox();
+          assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 391);
+        }
+      } finally {
+        await page.setViewportSize(viewport);
+      }
+      const downloaded = await downloadSelected(selection);
+      filteredArchive = downloaded.value;
+      assert.deepEqual(filteredArchive.counts, { conversations: 2, replies: 2 });
+      assert.deepEqual(filteredArchive.conversations, archive.conversations);
+      assert.deepEqual(readState(await get(owner, "/api/inbox")), before);
+      await clearDates.click();
+      assert.equal(await fromInput.inputValue(), "");
+      assert.equal(await throughInput.inputValue(), "");
+      const request = page.waitForRequest((value) => routePattern(new URL(value.url())));
+      const all = await downloadConversations();
+      assert.equal(new URL((await request).url()).search, "");
+      assert.equal(all.value.version, 1);
+      assert.equal(all.value.scope, "accessible-conversations");
+      assert.equal("selection" in all.value, false);
+      assert.deepEqual(all.value.counts, { conversations: 2, replies: 2 });
+    },
+  );
+
+  await check(
+    "one-sided UTC bounds include their creation day and exclude conversations on the other side",
+    async () => {
+      for (const [bounds, included] of [
+        [{ createdFrom: firstDate, createdThrough: null, timeZone: "UTC" }, true],
+        [{ createdFrom: null, createdThrough: lastDate, timeZone: "UTC" }, true],
+        [{ createdFrom: shiftDate(lastDate, 1), createdThrough: null, timeZone: "UTC" }, false],
+        [{ createdFrom: null, createdThrough: shiftDate(firstDate, -1), timeZone: "UTC" }, false],
+      ]) {
+        await setDates(bounds);
+        const { value } = await downloadSelected(bounds);
+        assert.deepEqual(value.counts, {
+          conversations: included ? 2 : 0,
+          replies: included ? 2 : 0,
+        });
+        assert.deepEqual(value.conversations, included ? archive.conversations : []);
+      }
+      await clearDates.click();
+    },
+  );
+
+  await check(
+    "invalid date ranges do not request a UI download and the API rejects ambiguous date queries",
+    async () => {
+      const requests = [];
+      const observe = (request) => {
+        if (routePattern(new URL(request.url()))) requests.push(request);
+      };
+      page.on("request", observe);
+      const before = downloads.length;
+      try {
+        await setDates({
+          createdFrom: shiftDate(lastDate, 1),
+          createdThrough: shiftDate(firstDate, -1),
+        });
+        if (await conversationButton().isEnabled()) {
+          await conversationButton().click();
+          await exportSection
+            .getByRole("status")
+            .filter({ hasText: "Choose valid dates, with the start on or before the end date." })
+            .waitFor();
+        }
+        await noNewDownload(before);
+        assert.equal(requests.length, 0, "An inverted date range is stopped before fetch");
+        assert.equal(await profileButton().isEnabled(), true);
+      } finally {
+        page.off("request", observe);
+        await clearDates.click();
+      }
+      assert.equal(await conversationButton().isEnabled(), true);
+      for (const query of [
+        "from=",
+        "from=2026-02-30",
+        `from=${firstDate}&from=${firstDate}`,
+        `from=${shiftDate(lastDate, 1)}&through=${shiftDate(firstDate, -1)}`,
+      ]) {
+        const response = await owner.request.get(`${endpoint}?${query}`);
+        assert.equal(response.status(), 400, "Invalid or duplicate date bounds fail closed");
+        assert.match(response.headers()["cache-control"], /no-store/);
+      }
+    },
+  );
+
+  await check(
+    "filtered downloads reject missing or mismatched selection and malformed or out-of-range archives",
+    async () => {
+      const outOfRange = structuredClone(filteredArchive);
+      outOfRange.conversations[0].createdAt = `${shiftDate(firstDate, -1)}T12:00:00.000Z`;
+      const mismatch = "The export response did not match the selected dates.";
+      const malformed = "The conversation archive could not be read.";
+      const invalidArchives = [
+        [archive, selection, mismatch],
+        [
+          {
+            ...filteredArchive,
+            selection: { createdFrom: null, createdThrough: lastDate, timeZone: "UTC" },
+          },
+          selection,
+          mismatch,
+        ],
+        [{ ...filteredArchive, complete: false }, selection, malformed],
+        [outOfRange, selection, malformed],
+        [filteredArchive, {}, mismatch],
+      ];
+      try {
+        for (const [value, bounds, message] of invalidArchives) {
+          await setDates(bounds);
+          const handler = (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: "application/json",
+              body: JSON.stringify(value),
+            });
+          await owner.route(routePattern, handler);
+          const before = downloads.length;
+          try {
+            const response = page.waitForResponse((result) => routePattern(new URL(result.url())));
+            await conversationButton().click();
+            await (await response).finished();
+            await exportSection.getByRole("status").filter({ hasText: message }).waitFor();
+            assert.equal(await conversationButton().isEnabled(), true);
+            assert.equal(await profileButton().isEnabled(), true);
+            await noNewDownload(before);
+          } finally {
+            await owner.unroute(routePattern, handler);
+          }
+        }
+      } finally {
+        if (await clearDates.isVisible()) await clearDates.click();
+      }
     },
   );
 
@@ -445,6 +650,8 @@ try {
         await conversationButton().click();
         await held.started;
         assert.equal(await profileButton().isDisabled(), true);
+        assert.equal(await fromInput.isDisabled(), true);
+        assert.equal(await throughInput.isDisabled(), true);
         assert.equal(
           await exportSection
             .getByRole("button", { name: "Preparing conversations…", exact: true })
